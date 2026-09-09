@@ -1,0 +1,13 @@
+# Runs the custom backend locally. The Flutter app and Supabase are not
+# part of this compose file — Supabase is already hosted, and the Flutter
+# app runs on-device/emulator, not in a container.
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped

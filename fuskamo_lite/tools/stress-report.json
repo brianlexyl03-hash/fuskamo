@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-08-15T06:07:07.110Z",
+  "node": "v22.16.0",
+  "cpus": 3,
+  "config": {
+    "candidates": 500000,
+    "trust": 500000,
+    "discovery": 250000
+  },
+  "results": [
+    {
+      "name": "recommendation:250k-candidates",
+      "ms": 1264.91,
+      "rssDeltaMB": 235.14,
+      "result": 100
+    },
+    {
+      "name": "trust:500000-profiles",
+      "ms": 93.88,
+      "rssDeltaMB": 3.34,
+      "result": 38423325.000050776
+    },
+    {
+      "name": "discovery:250000-players",
+      "ms": 747.46,
+      "rssDeltaMB": -12.74,
+      "result": 249749
+    },
+    {
+      "name": "adversarial-score-boundaries",
+      "ms": 0.25,
+      "rssDeltaMB": 0,
+      "result": 7
+    }
+  ],
+  "status": "PASS"
+}

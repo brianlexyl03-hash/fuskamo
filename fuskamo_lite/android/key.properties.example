@@ -1,0 +1,7 @@
+# Copy this file to android/key.properties for a signed release build.
+# Generate YOUR OWN upload keystore; do not use credentials from this example.
+# key.properties and *.jks are gitignored.
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+storeFile=YOUR_KEYSTORE_FILE.jks

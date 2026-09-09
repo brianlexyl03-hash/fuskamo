@@ -1,0 +1,492 @@
+openapi: 3.0.0
+info:
+  title: FUSKAMO Backend API
+  version: 1.0.0
+  description: >
+    Custom backend fronting M-Pesa, AI services, external APIs, notifications,
+    and admin operations. See backend/README.md and docs/admin-access.md.
+    Two distinct auth schemes are in use — see securitySchemes below; the
+    admin ones use real per-admin Supabase Auth sessions (JWT bearer tokens),
+    never a shared key.
+servers:
+  - url: http://localhost:8080/api
+paths:
+  /health:
+    get:
+      summary: Liveness — is the process running at all
+      responses:
+        '200': { description: OK }
+  /live:
+    get:
+      summary: Liveness — is the process running at all (orchestrator-style probe)
+      responses:
+        '200': { description: OK }
+  /ready:
+    get:
+      summary: Readiness — can this instance actually reach its dependencies (Supabase)
+      responses:
+        '200': { description: Ready to serve traffic }
+        '503': { description: Not ready — a dependency check failed }
+
+  /auth/refresh:
+    post:
+      summary: Thin proxy to Supabase Auth's refresh-token endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { description: New access/refresh token pair }
+        '400': { description: Missing refreshToken }
+        '429': { description: Rate limited — see authLimiter }
+
+  /mpesa/stk-push:
+    post:
+      summary: Initiate an M-Pesa STK push payment prompt
+      security: [{ ApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber, amount]
+              properties:
+                phoneNumber: { type: string, example: "254712345678" }
+                amount: { type: integer, example: 50 }
+                accountReference: { type: string }
+                transactionDesc: { type: string }
+      responses:
+        '200': { description: STK push initiated }
+        '429': { description: Rate limited — see costlyEndpointLimiter }
+  /mpesa/callback:
+    post:
+      summary: Safaricom's async payment result webhook (called by Safaricom, not the app)
+      responses:
+        '200': { description: Acknowledged }
+  /mpesa/status/{checkoutRequestId}:
+    get:
+      summary: Poll the status of a previously initiated STK push
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: checkoutRequestId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Transaction status }
+  /mpesa/history/{phoneNumber}:
+    get:
+      summary: Transaction history for a phone number
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: phoneNumber, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: List of transactions }
+  /mpesa/refund:
+    post:
+      summary: >
+        Reverse a completed M-Pesa payment. Takes FUSKAMO's own transaction
+        id (a UUID), never Safaricom's own TransactionID or a client-named
+        amount directly — the backend resolves the real Safaricom receipt
+        and caps the refund at the original paid amount server-side.
+      security: [{ AdminAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionId]
+              properties:
+                transactionId: { type: string, format: uuid, description: "FUSKAMO's own transactions.id, not Safaricom's code" }
+                amount: { type: integer, description: "Optional — omit to refund the full original amount" }
+                remarks: { type: string }
+      responses:
+        '200': { description: Reversal requested }
+        '400': { description: Not a completed transaction, or amount exceeds original payment }
+        '401': { description: Missing/invalid admin session }
+        '403': { description: Admin lacks the payments:refund permission }
+        '404': { description: No transaction with that id }
+
+  /ai/summarize-player:
+    post:
+      summary: Generate a short AI scouting note for a submission
+      security: [{ ApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, position, age, country]
+              properties:
+                name: { type: string }
+                position: { type: string }
+                age: { type: integer }
+                country: { type: string }
+                club: { type: string }
+                strengths: { type: string }
+      responses:
+        '200': { description: Summary generated }
+        '429': { description: Rate limited — see costlyEndpointLimiter }
+
+  /players-admin/pending:
+    get:
+      summary: List pending player submissions
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: List of pending players }
+        '403': { description: Admin lacks the players:view permission }
+  /players-admin/{id}/approve:
+    post:
+      summary: Approve a player submission
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Player approved }
+        '403': { description: Admin lacks the players:approve permission }
+  /players-admin/{id}/reject:
+    post:
+      summary: Reject a player submission
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Player rejected }
+        '403': { description: Admin lacks the players:approve permission }
+
+  /scouts-admin/pending:
+    get:
+      summary: List pending scout applications
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: List of pending scouts }
+        '403': { description: Admin lacks the scouts:view permission }
+  /scouts-admin/{id}/approve:
+    post:
+      summary: Approve a scout application
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Scout approved }
+        '403': { description: Admin lacks the scouts:approve permission }
+  /scouts-admin/{id}/reject:
+    post:
+      summary: Reject a scout application (deletes the pending row — see scoutAdminRepository.js)
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Scout application rejected }
+        '403': { description: Admin lacks the scouts:approve permission }
+
+  /admin/stats:
+    get:
+      summary: Overview dashboard counts (approved/pending/rejected players, scouts, boost revenue)
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: Stats object }
+        '403': { description: Admin lacks the analytics:view permission }
+  /admin/transactions:
+    get:
+      summary: Recent M-Pesa transactions
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200': { description: List of transactions }
+        '403': { description: Admin lacks the payments:view permission }
+  /admin/audit-logs:
+    get:
+      summary: Recent admin audit log entries (who did what, when, from where)
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200': { description: List of audit log entries }
+        '403': { description: Admin lacks the audit:view permission }
+
+  /admin-auth/me:
+    get:
+      summary: The signed-in admin's own profile, role, and permissions
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: Admin profile }
+  /admin-auth/mfa/confirm:
+    post:
+      summary: >
+        Confirm MFA is enabled for the caller's own account. Requires the
+        request's own token to already carry aal2 (a real completed TOTP
+        challenge) — a client cannot set this flag by simply claiming MFA
+        was set up.
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: MFA confirmed enabled }
+        '400': { description: Token does not carry aal2 yet }
+  /admin-auth/mfa/disable:
+    post:
+      summary: Disable MFA for the caller's own account (also requires aal2)
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: MFA disabled }
+        '400': { description: Token does not carry aal2 yet }
+  /admin-auth/sessions:
+    get:
+      summary: List the caller's own active sessions
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: List of sessions }
+  /admin-auth/sessions/{id}:
+    delete:
+      summary: Revoke one of the caller's own sessions by its admin_sessions row id
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Session revoked }
+        '404': { description: No such session for this admin }
+  /admin-auth/sessions/revoke-all:
+    post:
+      summary: Sign the caller out on every device, including the current one
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: All sessions revoked }
+
+  /admin-accounts/roles:
+    get:
+      summary: List available admin roles
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: List of roles }
+        '403': { description: Admin lacks the admins:view permission }
+  /admin-accounts:
+    get:
+      summary: List all administrator accounts
+      security: [{ AdminAuth: [] }]
+      responses:
+        '200': { description: List of admins }
+        '403': { description: Admin lacks the admins:view permission }
+  /admin-accounts/invite:
+    post:
+      summary: >
+        Invite a new administrator. Creates the Supabase Auth user via an
+        email invite (no password ever passes through this backend) and
+        the matching admin_users row.
+      security: [{ AdminAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, roleId]
+              properties:
+                email: { type: string, format: email }
+                displayName: { type: string }
+                roleId: { type: string, format: uuid }
+      responses:
+        '201': { description: Invite sent }
+        '403': { description: Admin lacks the admins:manage permission }
+  /admin-accounts/{id}/role:
+    patch:
+      summary: Change another administrator's role
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleId]
+              properties:
+                roleId: { type: string, format: uuid }
+      responses:
+        '200': { description: Role updated }
+        '400': { description: Cannot change your own role — ask another Super Admin }
+        '403': { description: Admin lacks the admins:assign_role permission }
+  /admin-accounts/{id}/disable:
+    post:
+      summary: Disable an administrator account (reversible, revokes sessions immediately)
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Admin disabled }
+        '400': { description: Cannot disable your own account }
+  /admin-accounts/{id}/suspend:
+    post:
+      summary: Suspend an administrator account (reversible, revokes sessions immediately)
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Admin suspended }
+        '400': { description: Cannot suspend your own account }
+  /admin-accounts/{id}/reactivate:
+    post:
+      summary: Reactivate a disabled or suspended administrator account
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Admin reactivated }
+        '400': { description: Cannot reactivate your own account }
+  /admin-accounts/{id}/revoke:
+    post:
+      summary: >
+        Permanently revoke an administrator — also deletes the underlying
+        Supabase Auth user. Cannot be undone.
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Admin permanently revoked }
+        '400': { description: Cannot revoke your own account }
+
+  /external/countries:
+    get:
+      summary: Live country list (name, ISO code, flag emoji)
+      responses:
+        '200': { description: List of countries }
+
+  /notifications/{userId}:
+    get:
+      summary: A user's in-app notifications
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: List of notifications }
+  /notifications/{id}/read:
+    post:
+      summary: Mark one notification as read
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Marked read }
+  /notifications/{userId}/preferences:
+    get:
+      summary: A user's SMS/email/push notification preferences
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Preferences object }
+    put:
+      summary: Update a user's notification preferences
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sms_enabled: { type: boolean }
+                email_enabled: { type: boolean }
+                push_enabled: { type: boolean }
+      responses:
+        '200': { description: Preferences updated }
+
+  /transactions/{phoneNumber}:
+    get:
+      summary: >
+        Transaction history for a phone number. REST-friendlier alias for
+        the same data as /mpesa/history/{phoneNumber} — same controller
+        method, kept as a separate path for API clarity.
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: phoneNumber, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: List of transactions }
+
+  /discovery/feed:
+    get:
+      summary: >
+        Ranked players for the signed-in scout, from discoveryEngine.js's
+        profile-match/quality/engagement/freshness/boost scoring plus a
+        country-diversity re-balancing pass. Excludes non-approved players
+        and anything above the fraud-score threshold outright.
+      security: [{ ScoutAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+      responses:
+        '200':
+          description: Ranked players with their score, highest first
+        '404':
+          description: No verified scout profile linked to this account
+
+  /discovery/events:
+    post:
+      summary: >
+        Logs one engagement event (view/save/contact/share) against a
+        player. IP and device identifiers are hashed server-side from the
+        request — never accepted directly from the client — and feed
+        discoveryEngine.js's 7-day engagement scoring and the nightly
+        fraud-score recompute (see jobs/scheduledJobs.js).
+      security: [{ ScoutAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId, eventType]
+              properties:
+                playerId: { type: string, format: uuid }
+                eventType: { type: string, enum: [view, save, contact, share] }
+                deviceId: { type: string, description: 'Optional client-generated device identifier, hashed before storage' }
+      responses:
+        '201': { description: Event recorded }
+        '400': { description: Missing or invalid playerId/eventType }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: >
+        Shared secret between the Flutter app and this backend
+        (BACKEND_API_KEY). Not user identity — just stops unauthenticated
+        internet traffic from hitting M-Pesa/AI endpoints. See
+        authentication/apiKeyAuth.js.
+    AdminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        A real Supabase Auth session belonging to an administrator with a
+        row in admin_users. NOT the same as ApiKeyAuth above, and NOT a
+        shared secret of any kind — every admin has their own account, own
+        role, and own granular permissions (see docs/admin-access.md and
+        authentication/adminAuth.js). Requests also need the specific
+        permission each route declares (authorization/permissions.js);
+        having a valid admin session alone is not sufficient for every
+        admin route.
+    ScoutAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        A real Supabase Auth session belonging to any signed-in user — NOT
+        an admin session (see AdminAuth) and NOT the shared ApiKeyAuth
+        secret. Used only by /discovery/*, which needs to know which scout
+        is asking so it can look up their preferences and attribute
+        engagement events (authentication/jwtAuth.js). The endpoint itself
+        further requires a verified row in scouts linked via user_id —
+        a valid session with no verified scout profile gets a 404, not a
+        403.

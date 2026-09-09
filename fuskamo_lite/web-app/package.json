@@ -1,0 +1,6 @@
+{
+  "name": "fuskamo-web",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {"test": "node --check app.js", "serve": "python3 -m http.server 4173"}
+}

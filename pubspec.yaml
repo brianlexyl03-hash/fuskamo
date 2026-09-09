@@ -1,0 +1,80 @@
+name: fuskamo
+description: FUSKAMO — Global football talent discovery. Built by FUSKAMO NPC.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  provider: ^6.1.2
+
+  # Backend (matches the Supabase project already set up for this app)
+  supabase_flutter: ^2.5.6
+
+  # HTTP client for calling the custom backend (M-Pesa, AI) — see /backend
+  http: ^1.2.2
+
+  # Fonts — loads Bebas Neue + Inter at runtime, no need to bundle font files
+  google_fonts: ^6.2.1
+
+  # Image picking for player submission photos
+  image_picker: ^1.1.2
+
+  # Local key-value storage (Phase 2: cached filters, onboarding flags)
+  shared_preferences: ^2.2.3
+
+  # Env-style config loading without committing real keys
+  flutter_dotenv: ^5.1.0
+
+  # Native share sheet (matches web app's share button)
+  share_plus: ^9.0.0
+
+  # Simple, readable routing
+  go_router: ^14.2.0
+
+  # Real connectivity monitoring (offline banner) — network/connectivity_service.dart
+  connectivity_plus: ^6.0.5
+
+  # Push notifications — notifications/push_notification_service.dart.
+  # Needs a real Firebase project before it compiles for a device build —
+  # see docs/push-notifications-setup.md.
+  firebase_core: ^3.3.0
+  firebase_messaging: ^15.0.4
+
+  # EN/SW localisation — localisation/app_localisations.dart
+  flutter_localizations:
+    sdk: flutter
+
+  # Play submitted player video clips — widgets/player_card.dart, screens/video_player_screen.dart
+  video_player: ^2.9.2
+
+  # mailto:/tel:/WhatsApp deep links for real Contact buttons — player_card.dart, scout_card.dart
+  url_launcher: ^6.3.1
+
+  # Renders the QR code for 2FA setup — screens/mfa_setup_screen.dart
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
+    - .env
+
+  # No custom font files bundled — google_fonts package fetches Bebas Neue / Inter
+  # on first use and caches them on-device. Uncomment below if you later switch to
+  # bundled font files in assets/fonts/ instead:
+  # fonts:
+  #   - family: BebasNeue
+  #     fonts:
+  #       - asset: assets/fonts/BebasNeue-Regular.ttf

@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fuskamo — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --bg: #10161A;
+    --bg-raised: #161E23;
+    --bg-card: #1B242A;
+    --line: #263038;
+    --pitch: #3FAE79;
+    --pitch-dim: #2E7D5B;
+    --amber: #E8A33D;
+    --red: #E0654F;
+    --text: #EDEDE6;
+    --text-dim: #8A9AA3;
+    --text-faint: #58656C;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  h1, h2, h3, .display {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .dim { color: var(--text-dim); }
+  .faint { color: var(--text-faint); }
+
+  .pitchline { display: flex; align-items: center; gap: 10px; margin: 24px 0 18px; }
+  .pitchline::before, .pitchline::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .pitchline .dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--pitch); background: transparent; }
+
+  #loginScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-card { width: 100%; max-width: 440px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 32px; }
+  .login-card h1 { font-size: 34px; margin: 0 0 4px; color: var(--pitch); }
+  .login-card p.sub { margin: 0 0 24px; color: var(--text-dim); font-size: 14px; }
+  label { display: block; font-size: 12px; color: var(--text-dim); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  input {
+    width: 100%; background: var(--bg-raised); border: 1px solid var(--line);
+    color: var(--text); padding: 11px 12px; border-radius: 7px; font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  input:focus { outline: none; border-color: var(--pitch); }
+  button { cursor: pointer; border: none; border-radius: 7px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px; }
+  .btn-primary { width: 100%; background: var(--pitch); color: #0B1512; padding: 12px; margin-top: 22px; }
+  .btn-primary:hover { background: #4EC28C; }
+  .btn-secondary { width: 100%; background: transparent; border: 1px solid var(--line); color: var(--text); padding: 11px; margin-top: 10px; }
+  .btn-secondary:hover { border-color: var(--pitch); }
+  .link-btn { background: none; border: none; color: var(--pitch); font-size: 13px; padding: 0; text-align: left; margin-top: 14px; }
+  #loginError, #enrollError, #accountsError { color: var(--red); font-size: 13px; margin-top: 12px; display: none; }
+  .totp-code-input { letter-spacing: 6px; font-size: 20px; text-align: center; }
+  .qr-wrap { background: #fff; padding: 12px; border-radius: 8px; margin: 14px 0; display: flex; justify-content: center; }
+  .qr-wrap img, .qr-wrap svg { width: 180px; height: 180px; }
+  .secret-fallback { font-size: 12px; color: var(--text-dim); word-break: break-all; margin-top: 8px; }
+
+  #app { display: none; min-height: 100vh; }
+  #app.active { display: flex; }
+  aside { width: 220px; flex-shrink: 0; background: var(--bg-raised); border-right: 1px solid var(--line); padding: 22px 0; display: flex; flex-direction: column; }
+  .brand { padding: 0 22px 20px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+  .brand h1 { font-size: 24px; margin: 0; color: var(--pitch); }
+  .brand span { font-size: 11px; color: var(--text-faint); }
+  nav { flex: 1; }
+  nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; color: var(--text-dim); padding: 11px 22px; font-size: 14px; }
+  nav button .count { margin-left: auto; background: var(--pitch-dim); color: #0B1512; font-size: 11px; padding: 1px 7px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; }
+  nav button.active { color: var(--text); background: var(--bg-card); border-left: 2px solid var(--pitch); }
+  nav button:hover { color: var(--text); }
+  nav .nav-divider { height: 1px; background: var(--line); margin: 10px 22px; }
+  .signout { margin: 10px 22px 0; padding: 10px; background: none; border: 1px solid var(--line); color: var(--text-faint); }
+  .signout:hover { border-color: var(--red); color: var(--red); }
+
+  main { flex: 1; padding: 28px 36px; max-width: 1100px; }
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; }
+  .topbar h2 { font-size: 28px; margin: 0; }
+  .who { font-size: 13px; color: var(--text-faint); text-align: right; }
+  .who .live { color: var(--pitch); }
+  .who .role-badge { display: block; font-size: 11px; color: var(--pitch); margin-top: 2px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
+  .stat { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .stat .num { font-family: 'Barlow Condensed', sans-serif; font-size: 34px; font-weight: 700; color: var(--pitch); line-height: 1; }
+  .stat .label { font-size: 12px; color: var(--text-dim); margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+  .card-list { display: flex; flex-direction: column; gap: 10px; }
+  .row-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; gap: 16px; }
+  .row-card .info { flex: 1; min-width: 0; }
+  .row-card .name { font-size: 16px; font-weight: 600; }
+  .row-card .meta { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
+  .row-card .actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+  .btn-approve { background: var(--pitch); color: #0B1512; padding: 8px 14px; }
+  .btn-approve:hover { background: #4EC28C; }
+  .btn-reject { background: transparent; border: 1px solid var(--red); color: var(--red); padding: 8px 14px; }
+  .btn-reject:hover { background: rgba(224,101,79,0.1); }
+  .btn-neutral { background: transparent; border: 1px solid var(--line); color: var(--text); padding: 8px 14px; }
+  .btn-neutral:hover { border-color: var(--pitch); }
+  .btn-amber { background: transparent; border: 1px solid var(--amber); color: var(--amber); padding: 8px 14px; }
+  .btn-amber:hover { background: rgba(232,163,61,0.1); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint); padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  tbody td { padding: 11px 12px; border-bottom: 1px solid var(--line); }
+  tbody tr:hover { background: var(--bg-card); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; }
+  .badge-completed, .badge-active { background: rgba(63,174,121,0.15); color: var(--pitch); }
+  .badge-failed, .badge-revoked { background: rgba(224,101,79,0.15); color: var(--red); }
+  .badge-pending, .badge-suspended { background: rgba(232,163,61,0.15); color: var(--amber); }
+  .badge-disabled { background: rgba(88,101,108,0.25); color: var(--text-dim); }
+
+  select {
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--text);
+    padding: 8px 10px; border-radius: 7px; font-size: 13px; font-family: 'Inter', sans-serif;
+  }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-faint); }
+  .empty .dot-lg { width: 10px; height: 10px; border: 1.5px solid var(--text-faint); border-radius: 50%; margin: 0 auto 14px; }
+  .loading { text-align: center; padding: 60px 20px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  .err-banner { background: rgba(224,101,79,0.1); border: 1px solid var(--red); color: var(--red); padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  .info-banner { background: rgba(63,174,121,0.08); border: 1px solid var(--pitch-dim); color: var(--text); padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+
+  .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); margin: 26px 0 10px; }
+  .section-title:first-child { margin-top: 0; }
+
+  /* ---- modal ---- */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    align-items: center; justify-content: center; z-index: 200; padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal { width: 100%; max-width: 420px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+  .modal h3 { margin: 0 0 6px; font-size: 22px; }
+  .modal p.sub { color: var(--text-dim); font-size: 13px; margin: 0 0 4px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+  .modal-actions button { flex: 1; padding: 11px; }
+
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--bg-card); border: 1px solid var(--pitch); color: var(--text);
+    padding: 12px 20px; border-radius: 8px; font-size: 14px; opacity: 0;
+    transition: all 0.25s ease; pointer-events: none; z-index: 100; max-width: 90vw;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { border-color: var(--red); }
+
+  @media (max-width: 720px) {
+    #app.active { flex-direction: column; }
+    aside { width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; }
+    .brand { display: none; }
+    nav { display: flex; flex: none; }
+    nav button { width: auto; white-space: nowrap; border-left: none; border-bottom: 2px solid transparent; }
+    nav button.active { border-left: none; border-bottom: 2px solid var(--pitch); }
+    .nav-divider { display: none; }
+    .signout { display: none; }
+    main { padding: 18px; }
+    .row-card { flex-direction: column; align-items: stretch; }
+    .row-card .actions { justify-content: stretch; }
+    .row-card .actions button { flex: 1; }
+    table { display: block; overflow-x: auto; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN SCREEN ===================== -->
+<div id="loginScreen">
+  <div class="login-card" id="loginCard">
+    <h1>Fuskamo</h1>
+    <p class="sub">Admin console — sign in with your admin account</p>
+
+    <div id="loginStepConfig">
+      <label for="supabaseUrl">Supabase URL</label>
+      <input id="supabaseUrl" placeholder="https://xxxx.supabase.co" />
+      <label for="supabaseAnonKey">Supabase anon key</label>
+      <input id="supabaseAnonKey" type="password" placeholder="eyJ..." />
+      <label for="backendUrl">Backend URL</label>
+      <input id="backendUrl" placeholder="https://your-backend.onrender.com" />
+      <button class="btn-primary" onclick="saveSetup()">Continue</button>
+      <p class="faint" style="font-size:12px;margin-top:14px">
+        One-time setup — the Supabase URL/anon key are the same public values
+        already in the Flutter app's <code>.env</code> (SUPABASE_URL / the
+        anon key, never the service role key). Saved in this browser only.
+      </p>
+    </div>
+
+    <div id="loginStepAuth" style="display:none">
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" placeholder="you@example.com" />
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password" placeholder="••••••••" />
+      <button class="btn-primary" onclick="doSignIn()">Sign in</button>
+      <button class="link-btn" onclick="doForgotPassword()">Forgot password?</button>
+      <button class="link-btn" onclick="showConfigStep()">Change server settings</button>
+    </div>
+
+    <div id="loginStepMfa" style="display:none">
+      <p class="sub">Enter the 6-digit code from your authenticator app.</p>
+      <input id="mfaCode" class="totp-code-input" maxlength="6" placeholder="000000" inputmode="numeric" />
+      <button class="btn-primary" onclick="verifyMfaChallenge()">Verify</button>
+    </div>
+
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<!-- ===================== MFA ENROLLMENT MODAL ===================== -->
+<div class="modal-backdrop" id="enrollModal">
+  <div class="modal">
+    <h3>Enable MFA</h3>
+    <p class="sub">Scan this with Google Authenticator, Authy, or any TOTP app.</p>
+    <div class="qr-wrap" id="qrWrap"></div>
+    <div class="secret-fallback" id="secretFallback"></div>
+    <label for="enrollCode">Enter the 6-digit code to confirm</label>
+    <input id="enrollCode" class="totp-code-input" maxlength="6" placeholder="000000" inputmode="numeric" />
+    <div id="enrollError"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeEnrollModal()">Cancel</button>
+      <button class="btn-primary" onclick="confirmEnroll()" style="margin-top:0">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== INVITE ADMIN MODAL ===================== -->
+<div class="modal-backdrop" id="inviteModal">
+  <div class="modal">
+    <h3>Invite administrator</h3>
+    <p class="sub">They'll get an email to set their own password. You never see or set it.</p>
+    <label for="inviteEmail">Email</label>
+    <input id="inviteEmail" type="email" placeholder="newadmin@example.com" />
+    <label for="inviteName">Display name (optional)</label>
+    <input id="inviteName" placeholder="Jane Doe" />
+    <label for="inviteRole">Role</label>
+    <select id="inviteRole" style="width:100%"></select>
+    <div id="inviteError" style="color:var(--red);font-size:13px;margin-top:12px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeInviteModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitInvite()" style="margin-top:0">Send invite</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP SHELL ===================== -->
+<div id="app">
+  <aside>
+    <div class="brand">
+      <h1>Fuskamo</h1>
+      <span>Admin console</span>
+    </div>
+    <nav id="navList">
+      <button data-view="overview" class="active" onclick="switchView('overview')">Overview</button>
+      <button data-view="players" onclick="switchView('players')">Players <span class="count" id="countPlayers" style="display:none">0</span></button>
+      <button data-view="scouts" onclick="switchView('scouts')">Scouts <span class="count" id="countScouts" style="display:none">0</span></button>
+      <button data-view="verification" onclick="switchView('verification')">Verification <span class="count" id="countVerification" style="display:none">0</span></button>
+      <button data-view="transactions" onclick="switchView('transactions')">Transactions</button>
+      <button data-view="auditlog" onclick="switchView('auditlog')">Audit log</button>
+      <div class="nav-divider"></div>
+      <button data-view="security" onclick="switchView('security')">My security</button>
+      <button data-view="admins" onclick="switchView('admins')" id="navAdmins" style="display:none">Administrators</button>
+      <div class="nav-divider"></div>
+      <button onclick="window.location.href='/web-app/'">Open FUSKAMO Web</button>
+    </nav>
+    <button class="signout" onclick="signOut()">Sign out</button>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <h2 id="viewTitle">Overview</h2>
+      <div class="who">
+        <span class="live">●</span> <span id="whoEmail"></span>
+        <span class="role-badge" id="whoRole"></span>
+      </div>
+    </div>
+    <div class="pitchline"><div class="dot"></div></div>
+    <div id="content"></div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// ---------- setup (Supabase project + backend URL, saved locally) ----------
+let SETUP = null;
+let sbClient = null;
+let ME = null; // { id, email, displayName, role, permissions[] } from /api/admin-auth/me
+let pendingMfa = null; // { factorId, challengeId } while mid-challenge
+let currentView = 'overview';
+
+function loadSetup() {
+  const raw = localStorage.getItem('fuskamo_admin_setup');
+  return raw ? JSON.parse(raw) : null;
+}
+function saveSetupToStorage(cfg) {
+  localStorage.setItem('fuskamo_admin_setup', JSON.stringify(cfg));
+}
+function showConfigStep() {
+  $('loginStepConfig').style.display = 'block';
+  $('loginStepAuth').style.display = 'none';
+  $('loginStepMfa').style.display = 'none';
+  if (SETUP) {
+    $('supabaseUrl').value = SETUP.supabaseUrl;
+    $('supabaseAnonKey').value = SETUP.supabaseAnonKey;
+    $('backendUrl').value = SETUP.backendUrl;
+  }
+}
+function saveSetup() {
+  const supabaseUrl = $('supabaseUrl').value.trim().replace(/\/$/, '');
+  const supabaseAnonKey = $('supabaseAnonKey').value.trim();
+  const backendUrl = $('backendUrl').value.trim().replace(/\/$/, '');
+  const errEl = $('loginError');
+  errEl.style.display = 'none';
+  if (!supabaseUrl || !supabaseAnonKey || !backendUrl) {
+    errEl.textContent = 'Fill in all three fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+  SETUP = { supabaseUrl, supabaseAnonKey, backendUrl };
+  saveSetupToStorage(SETUP);
+  initSupabase();
+  $('loginStepConfig').style.display = 'none';
+  $('loginStepAuth').style.display = 'block';
+}
+function initSupabase() {
+  sbClient = supabase.createClient(SETUP.supabaseUrl, SETUP.supabaseAnonKey, {
+    auth: { persistSession: true, autoRefreshToken: true, storageKey: 'fuskamo-admin-auth' },
+  });
+}
+
+// ---------- sign in / MFA challenge ----------
+async function doSignIn() {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  const errEl = $('loginError');
+  errEl.style.display = 'none';
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; errEl.style.display = 'block'; return; }
+
+  const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+
+  await proceedPastSignIn();
+}
+
+async function proceedPastSignIn() {
+  const { data: aal } = await sbClient.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    const { data: factors, error: factorErr } = await sbClient.auth.mfa.listFactors();
+    if (factorErr) { toast(factorErr.message, true); return; }
+    const totp = (factors.totp || [])[0];
+    if (!totp) { toast('MFA is required but no factor is enrolled — contact a Super Admin.', true); return; }
+    const { data: challenge, error: challErr } = await sbClient.auth.mfa.challenge({ factorId: totp.id });
+    if (challErr) { toast(challErr.message, true); return; }
+    pendingMfa = { factorId: totp.id, challengeId: challenge.id };
+    $('loginStepAuth').style.display = 'none';
+    $('loginStepMfa').style.display = 'block';
+    return;
+  }
+  await finishLoginAndEnter();
+}
+
+async function verifyMfaChallenge() {
+  const code = $('mfaCode').value.trim();
+  const errEl = $('loginError');
+  errEl.style.display = 'none';
+  if (!pendingMfa) return;
+  const { error } = await sbClient.auth.mfa.verify({ factorId: pendingMfa.factorId, challengeId: pendingMfa.challengeId, code });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  pendingMfa = null;
+  await finishLoginAndEnter();
+}
+
+async function doForgotPassword() {
+  const email = $('loginEmail').value.trim();
+  if (!email) { toast('Enter your email first, then tap Forgot password again.', true); return; }
+  const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo: location.href });
+  if (error) { toast(error.message, true); return; }
+  toast('Password reset email sent.');
+}
+
+async function finishLoginAndEnter() {
+  try {
+    ME = await api('/api/admin-auth/me');
+    enterApp();
+  } catch (e) {
+    $('loginError').textContent = e.message || 'Signed in, but this account has no admin access.';
+    $('loginError').style.display = 'block';
+    await sbClient.auth.signOut();
+  }
+}
+
+function signOut() {
+  sbClient.auth.signOut();
+  ME = null;
+  location.reload();
+}
+
+// ---------- API (bearer token, never a shared key) ----------
+async function api(path, options = {}) {
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) throw new Error('Not signed in');
+  const res = await fetch(SETUP.backendUrl + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + session.access_token,
+      ...(options.headers || {}),
+    },
+  });
+  let body;
+  try { body = await res.json(); } catch { body = {}; }
+  if (!res.ok) throw new Error(body.message || body.error || `Request failed (${res.status})`);
+  return body;
+}
+
+// ---------- toast ----------
+let toastTimer;
+function toast(msg, isError = false) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = isError ? 'show error' : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+
+// ---------- app shell ----------
+function enterApp() {
+  $('loginScreen').style.display = 'none';
+  $('app').classList.add('active');
+  $('whoEmail').textContent = ME.admin.email;
+  $('whoRole').textContent = ME.admin.role;
+  if (ME.admin.permissions.includes('admins:view')) $('navAdmins').style.display = 'block';
+  switchView('overview');
+}
+
+const titles = { overview: 'Overview', players: 'Pending players', scouts: 'Pending scouts', verification: 'Verification review', transactions: 'Transactions', auditlog: 'Audit log', security: 'My security', admins: 'Administrators' };
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  $('viewTitle').textContent = titles[view];
+  render();
+}
+
+async function render() {
+  const content = $('content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    if (currentView === 'overview') return renderOverview();
+    if (currentView === 'players') return renderPlayers();
+    if (currentView === 'scouts') return renderScouts();
+    if (currentView === 'verification') return renderVerification();
+    if (currentView === 'transactions') return renderTransactions();
+    if (currentView === 'auditlog') return renderAuditLog();
+    if (currentView === 'security') return renderSecurity();
+    if (currentView === 'admins') return renderAdmins();
+  } catch (e) {
+    content.innerHTML = `<div class="err-banner">${esc(e.message)}</div>`;
+  }
+}
+
+function emptyState(msg) { return `<div class="empty"><div class="dot-lg"></div>${esc(msg)}</div>`; }
+function can(perm) { return ME.admin.permissions.includes(perm); }
+
+// ---------- overview ----------
+async function renderOverview() {
+  const [statsRes, playersRes, scoutsRes] = await Promise.all([
+    can('analytics:view') ? api('/api/admin/stats') : Promise.resolve({ stats: {} }),
+    can('players:view') ? api('/api/players-admin/pending') : Promise.resolve({ players: [] }),
+    can('scouts:view') ? api('/api/scouts-admin/pending') : Promise.resolve({ scouts: [] }),
+  ]);
+  const s = statsRes.stats || {};
+  updateNavCounts(playersRes.players?.length || 0, scoutsRes.scouts?.length || 0);
+  const cards = [
+    ['Pending players', playersRes.players?.length ?? 0],
+    ['Pending scouts', scoutsRes.scouts?.length ?? 0],
+    ['Total players', s.totalPlayers ?? '—'],
+    ['Total scouts', s.totalScouts ?? '—'],
+    ['Rejected players', s.rejectedPlayers ?? '—'],
+    ['Boost revenue (KES)', s.boostRevenueKes ?? '—'],
+  ];
+  $('content').innerHTML = `
+    <div class="stats">${cards.map(([label, num]) => `<div class="stat"><div class="num mono">${esc(num)}</div><div class="label">${esc(label)}</div></div>`).join('')}</div>
+    <div class="pitchline"><div class="dot"></div></div>
+    <p class="dim" style="font-size:13px">Signed in as <b>${esc(ME.admin.role)}</b>. Your permissions: <span class="mono faint">${esc(ME.admin.permissions.join(', '))}</span></p>
+  `;
+}
+function updateNavCounts(playersCount, scoutsCount) {
+  const p = $('countPlayers'), sEl = $('countScouts');
+  p.textContent = playersCount; p.style.display = playersCount > 0 ? 'inline-block' : 'none';
+  sEl.textContent = scoutsCount; sEl.style.display = scoutsCount > 0 ? 'inline-block' : 'none';
+}
+
+// ---------- players / scouts ----------
+async function renderPlayers() {
+  const { players } = await api('/api/players-admin/pending');
+  $('content').innerHTML = players?.length ? `<div class="card-list">${players.map(playerRow).join('')}</div>` : emptyState('No players waiting on review.');
+}
+function playerRow(p) {
+  const canApprove = can('players:approve');
+  return `<div class="row-card" id="player-${p.id}">
+    <div class="info"><div class="name">${esc(p.name)}</div><div class="meta">${esc(p.position || '—')} · ${esc(p.club || 'No club listed')} · submitted ${fmtDate(p.created_at)}</div></div>
+    <div class="actions">${canApprove ? `<button class="btn-approve" onclick="act('players','${p.id}','approve')">Approve</button><button class="btn-reject" onclick="act('players','${p.id}','reject')">Reject</button>` : '<span class="faint" style="font-size:12px">View only</span>'}</div>
+  </div>`;
+}
+async function renderScouts() {
+  const { scouts } = await api('/api/scouts-admin/pending');
+  $('content').innerHTML = scouts?.length ? `<div class="card-list">${scouts.map(scoutRow).join('')}</div>` : emptyState('No scout applications waiting on review.');
+}
+function scoutRow(s) {
+  const canApprove = can('scouts:approve');
+  return `<div class="row-card" id="scout-${s.id}">
+    <div class="info"><div class="name">${esc(s.name)}</div><div class="meta">${esc(s.organization || 'Independent')} · ${esc(s.badge_type || '—')} · submitted ${fmtDate(s.created_at)}</div></div>
+    <div class="actions">${canApprove ? `<button class="btn-approve" onclick="act('scouts','${s.id}','approve')">Approve</button><button class="btn-reject" onclick="act('scouts','${s.id}','reject')">Reject</button>` : '<span class="faint" style="font-size:12px">View only</span>'}</div>
+  </div>`;
+}
+async function act(kind, id, action) {
+  if (action === 'reject' && !confirm('Reject this submission? This cannot be undone from here.')) return;
+  const el = document.getElementById(`${kind === 'players' ? 'player' : 'scout'}-${id}`);
+  if (el) el.style.opacity = '0.5';
+  try {
+    await api(`/api/${kind}-admin/${id}/${action}`, { method: 'POST' });
+    toast(action === 'approve' ? 'Approved' : 'Rejected');
+    if (el) el.remove();
+  } catch (e) {
+    toast(e.message, true);
+    if (el) el.style.opacity = '1';
+  }
+}
+
+
+async function renderVerification() {
+  if (!can('verification:manage')) { $('content').innerHTML = emptyState('You do not have verification:manage permission.'); return; }
+  const { applications } = await api('/api/verification-admin/pending');
+  const count = $('countVerification'); count.textContent = applications?.length || 0; count.style.display = applications?.length ? 'inline-block' : 'none';
+  $('content').innerHTML = applications?.length ? `<div class="card-list">${applications.map(verificationRow).join('')}</div>` : emptyState('No identity or organization applications waiting on review.');
+}
+function verificationRow(a) {
+  const evidence=(a.evidence_urls||[]).map(x=>`<a href="${esc(x)}" target="_blank" rel="noreferrer" style="color:var(--pitch)">${esc(x)}</a>`).join('<br>');
+  return `<div class="row-card" id="verification-${a.id}" style="display:block">
+    <div class="info"><div class="name">${esc(a.claimed_name)} · ${esc(a.applicant_role).toUpperCase()}</div>
+    <div class="meta">${esc(a.organization_name||'Independent')} · ${esc(a.country||'Country not supplied')} · submitted ${fmtDate(a.submitted_at)}</div>
+    <div class="meta" style="margin-top:8px">Website: ${esc(a.official_website||'—')} · Domain: ${esc(a.official_domain||'—')} · Email: ${esc(a.official_email||'—')}</div>
+    <div class="meta">Registration: ${esc(a.registration_number||'—')} · Governing body: ${esc(a.governing_body||'—')} · Licence: ${esc(a.professional_license||'—')}</div>
+    <div class="meta" style="margin-top:8px">Applicant accepted the anti-impersonation declaration.</div><div class="meta" style="margin-top:8px">Evidence:<br>${evidence||'—'}</div></div>
+    <div class="actions" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-secondary" onclick="verifyDomain('${a.id}')">Check DNS</button><button class="btn-approve" onclick="reviewVerification('${a.id}','approved')">Award ${a.applicant_role==='club'?'GOLD':a.applicant_role==='scout'?'BLUE':'BLACK'} TICK</button><button class="btn-secondary" onclick="reviewVerification('${a.id}','needs_more_info')">Need more info</button><button class="btn-reject" onclick="reviewVerification('${a.id}','rejected')">Reject</button></div>
+  </div>`;
+}
+async function verifyDomain(id){
+  const el=document.getElementById('verification-'+id); if(el)el.style.opacity='.5';
+  try{await api(`/api/verification-admin/${id}/domain-check`,{method:'POST'});toast('Official domain challenge verified.');}catch(e){toast(e.message,true);}finally{if(el)el.style.opacity='1';}
+}
+async function reviewVerification(id,decision){
+  let reason=''; if(decision!=='approved'){reason=prompt(decision==='rejected'?'Reason for rejection':'What evidence is missing?')||''; if(!reason)return;}
+  const el=document.getElementById('verification-'+id); if(el)el.style.opacity='.5';
+  try{await api(`/api/verification-admin/${id}/review`,{method:'POST',body:JSON.stringify({decision,reason})});toast(decision==='approved'?'Verification awarded — no payment involved.':decision==='rejected'?'Application rejected.':'Applicant asked for more information.');if(el)el.remove();}catch(e){toast(e.message,true);if(el)el.style.opacity='1';}
+}
+
+// ---------- transactions / audit log ----------
+async function renderTransactions() {
+  const { transactions } = await api('/api/admin/transactions?limit=100');
+  if (!transactions?.length) { $('content').innerHTML = emptyState('No transactions yet.'); return; }
+  $('content').innerHTML = `<table><thead><tr><th>Date</th><th>Type</th><th>Amount (KES)</th><th>Status</th><th>Ref</th></tr></thead><tbody>
+    ${transactions.map(t => `<tr><td class="mono faint">${fmtDate(t.created_at)}</td><td>${esc(t.type || '—')}</td><td class="mono">${esc(t.amount ?? '—')}</td><td><span class="badge badge-${esc(t.status)}">${esc(t.status)}</span></td><td class="mono faint">${esc(t.mpesa_receipt || t.id)}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+async function renderAuditLog() {
+  const { logs } = await api('/api/admin/audit-logs?limit=100');
+  if (!logs?.length) { $('content').innerHTML = emptyState('No audit entries yet.'); return; }
+  $('content').innerHTML = `<table><thead><tr><th>Date</th><th>Actor</th><th>Action</th><th>Target</th><th>IP</th></tr></thead><tbody>
+    ${logs.map(l => `<tr><td class="mono faint">${fmtDate(l.created_at)}</td><td>${esc(l.actor || 'unknown-admin')}</td><td>${esc(l.action)}</td><td class="mono faint">${esc(l.target_id || '—')}</td><td class="mono faint">${esc(l.ip_address || '—')}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+// ---------- my security: MFA + sessions ----------
+async function renderSecurity() {
+  const { sessions } = await api('/api/admin-auth/sessions');
+  const mfaEnabled = !!ME.admin.mfaEnabled;
+  $('content').innerHTML = `
+    <div class="section-title">Multi-factor authentication</div>
+    <div class="row-card">
+      <div class="info">
+        <div class="name">${mfaEnabled ? 'MFA is enabled' : 'MFA is not enabled'}</div>
+        <div class="meta">${mfaEnabled ? 'A TOTP code is required every time you sign in.' : 'Strongly recommended for every admin account.'}</div>
+      </div>
+      <div class="actions">
+        ${mfaEnabled
+          ? '<button class="btn-reject" onclick="disableMfaFlow()">Disable MFA</button>'
+          : '<button class="btn-approve" onclick="openEnrollModal()">Enable MFA</button>'}
+      </div>
+    </div>
+    <div class="section-title">Active sessions</div>
+    <div class="card-list">
+      ${sessions.map(s => `<div class="row-card">
+        <div class="info">
+          <div class="name">${esc(s.user_agent || 'Unknown device')} ${s.isCurrent ? '<span class="badge badge-active">This device</span>' : ''}</div>
+          <div class="meta">IP ${esc(s.ip_address || '—')} · last seen ${fmtDate(s.last_seen_at)} · since ${fmtDate(s.created_at)}</div>
+        </div>
+        <div class="actions">${s.isCurrent ? '' : `<button class="btn-neutral" onclick="revokeOneSession('${s.id}')">Revoke</button>`}</div>
+      </div>`).join('')}
+    </div>
+    <div class="section-title">Danger zone</div>
+    <div class="row-card">
+      <div class="info"><div class="name">Sign out everywhere</div><div class="meta">Ends every session on every device, including this one.</div></div>
+      <div class="actions"><button class="btn-reject" onclick="revokeAllSessionsFlow()">Sign out everywhere</button></div>
+    </div>
+  `;
+}
+
+function openEnrollModal() {
+  $('enrollError').style.display = 'none';
+  $('enrollCode').value = '';
+  $('enrollModal').classList.add('show');
+  startEnroll();
+}
+function closeEnrollModal() { $('enrollModal').classList.remove('show'); }
+let enrollFactorId = null;
+async function startEnroll() {
+  const { data, error } = await sbClient.auth.mfa.enroll({ factorType: 'totp' });
+  if (error) { $('enrollError').textContent = error.message; $('enrollError').style.display = 'block'; return; }
+  enrollFactorId = data.id;
+  $('qrWrap').innerHTML = data.totp.qr_code;
+  $('secretFallback').textContent = 'Manual entry key: ' + data.totp.secret;
+}
+async function confirmEnroll() {
+  const code = $('enrollCode').value.trim();
+  const errEl = $('enrollError');
+  errEl.style.display = 'none';
+  const { data: challenge, error: challErr } = await sbClient.auth.mfa.challenge({ factorId: enrollFactorId });
+  if (challErr) { errEl.textContent = challErr.message; errEl.style.display = 'block'; return; }
+  const { error: verifyErr } = await sbClient.auth.mfa.verify({ factorId: enrollFactorId, challengeId: challenge.id, code });
+  if (verifyErr) { errEl.textContent = verifyErr.message; errEl.style.display = 'block'; return; }
+  try {
+    await api('/api/admin-auth/mfa/confirm', { method: 'POST' });
+    ME.admin.mfaEnabled = true;
+    closeEnrollModal();
+    toast('MFA enabled');
+    switchView('security');
+  } catch (e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
+async function disableMfaFlow() {
+  if (!confirm('Disable MFA on your account? You will only need your password to sign in.')) return;
+  try {
+    await api('/api/admin-auth/mfa/disable', { method: 'POST' });
+    const { data: factors } = await sbClient.auth.mfa.listFactors();
+    for (const f of (factors?.totp || [])) await sbClient.auth.mfa.unenroll({ factorId: f.id });
+    ME.admin.mfaEnabled = false;
+    toast('MFA disabled');
+    switchView('security');
+  } catch (e) { toast(e.message, true); }
+}
+async function revokeOneSession(id) {
+  try {
+    await api(`/api/admin-auth/sessions/${id}`, { method: 'DELETE' });
+    toast('Session revoked');
+    switchView('security');
+  } catch (e) { toast(e.message, true); }
+}
+async function revokeAllSessionsFlow() {
+  if (!confirm('Sign out on every device, including this one?')) return;
+  try {
+    await api('/api/admin-auth/sessions/revoke-all', { method: 'POST' });
+  } catch (e) { /* fall through to local sign-out regardless */ }
+  signOut();
+}
+
+// ---------- administrators (Super Admin only) ----------
+async function renderAdmins() {
+  const [{ admins }, { roles }] = await Promise.all([api('/api/admin-accounts'), api('/api/admin-accounts/roles')]);
+  const canManage = can('admins:manage');
+  $('content').innerHTML = `
+    ${canManage ? `<button class="btn-approve" style="margin-bottom:16px" onclick="openInviteModal()">+ Invite administrator</button>` : ''}
+    <table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>MFA</th><th>Last login</th>${canManage ? '<th></th>' : ''}</tr></thead><tbody>
+      ${admins.map(a => `<tr>
+        <td>${esc(a.email)}${a.display_name ? `<div class="faint" style="font-size:11px">${esc(a.display_name)}</div>` : ''}</td>
+        <td>${esc(a.role)}</td>
+        <td><span class="badge badge-${esc(a.status)}">${esc(a.status)}</span></td>
+        <td>${a.mfa_enabled ? '✓' : '—'}</td>
+        <td class="mono faint">${fmtDate(a.last_login_at)}</td>
+        ${canManage ? `<td>${adminRowActions(a)}</td>` : ''}
+      </tr>`).join('')}
+    </tbody></table>
+    <div id="rolesCache" style="display:none">${esc(JSON.stringify(roles))}</div>
+  `;
+  window.__adminRoles = roles;
+}
+function adminRowActions(a) {
+  if (a.id === ME.admin.id) return '<span class="faint" style="font-size:12px">You</span>';
+  const buttons = [];
+  if (a.status === 'active') {
+    buttons.push(`<button class="btn-amber" onclick="adminAction('${a.id}','suspend')">Suspend</button>`);
+    buttons.push(`<button class="btn-neutral" onclick="adminAction('${a.id}','disable')">Disable</button>`);
+  } else if (a.status === 'disabled' || a.status === 'suspended') {
+    buttons.push(`<button class="btn-approve" onclick="adminAction('${a.id}','reactivate')">Reactivate</button>`);
+  }
+  if (a.status !== 'revoked') {
+    buttons.push(`<button class="btn-reject" onclick="adminAction('${a.id}','revoke')">Revoke</button>`);
+  }
+  return `<div class="actions" style="justify-content:flex-end">${buttons.join('')}</div>`;
+}
+async function adminAction(id, action) {
+  const verb = { disable: 'disable', suspend: 'suspend', reactivate: 'reactivate', revoke: 'permanently revoke' }[action];
+  if (action === 'revoke' && !confirm(`Permanently revoke this administrator? This cannot be undone.`)) return;
+  if (action !== 'revoke' && !confirm(`${verb[0].toUpperCase()}${verb.slice(1)} this administrator?`)) return;
+  try {
+    await api(`/api/admin-accounts/${id}/${action}`, { method: 'POST' });
+    toast('Done');
+    switchView('admins');
+  } catch (e) { toast(e.message, true); }
+}
+function openInviteModal() {
+  $('inviteEmail').value = '';
+  $('inviteName').value = '';
+  $('inviteError').style.display = 'none';
+  const sel = $('inviteRole');
+  sel.innerHTML = (window.__adminRoles || []).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  $('inviteModal').classList.add('show');
+}
+function closeInviteModal() { $('inviteModal').classList.remove('show'); }
+async function submitInvite() {
+  const email = $('inviteEmail').value.trim();
+  const displayName = $('inviteName').value.trim();
+  const roleId = $('inviteRole').value;
+  const errEl = $('inviteError');
+  errEl.style.display = 'none';
+  if (!email || !roleId) { errEl.textContent = 'Email and role are required.'; errEl.style.display = 'block'; return; }
+  try {
+    await api('/api/admin-accounts/invite', { method: 'POST', body: JSON.stringify({ email, displayName, roleId }) });
+    closeInviteModal();
+    toast('Invite sent');
+    switchView('admins');
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+}
+
+// ---------- boot ----------
+(async function boot() {
+  SETUP = loadSetup();
+  if (!SETUP) return; // stays on the config step
+  initSupabase();
+  $('loginStepConfig').style.display = 'none';
+  $('loginStepAuth').style.display = 'block';
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (session) {
+    try {
+      ME = await api('/api/admin-auth/me');
+      enterApp();
+    } catch (e) {
+      // stale/invalid session — fall through to the login form
+    }
+  }
+})();
+</script>
+</body>
+</html>

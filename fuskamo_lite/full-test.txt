@@ -1,0 +1,250 @@
+TAP version 13
+# Subtest: requirePermission rejects a request with no admin session at all
+ok 1 - requirePermission rejects a request with no admin session at all
+  ---
+  duration_ms: 0.682976
+  type: 'test'
+  ...
+# Subtest: requirePermission rejects an admin whose role lacks the exact permission
+ok 2 - requirePermission rejects an admin whose role lacks the exact permission
+  ---
+  duration_ms: 0.17479
+  type: 'test'
+  ...
+# Subtest: requirePermission allows an admin whose role has the exact permission
+ok 3 - requirePermission allows an admin whose role has the exact permission
+  ---
+  duration_ms: 0.122633
+  type: 'test'
+  ...
+# Subtest: requirePermission does not accept a partial/near-miss permission (least privilege)
+ok 4 - requirePermission does not accept a partial/near-miss permission (least privilege)
+  ---
+  duration_ms: 0.111136
+  type: 'test'
+  ...
+# Subtest: requireRole rejects when req.adminUser has no role at all
+ok 5 - requireRole rejects when req.adminUser has no role at all
+  ---
+  duration_ms: 0.143123
+  type: 'test'
+  ...
+# Subtest: requireRole rejects a role not in the allowed list
+ok 6 - requireRole rejects a role not in the allowed list
+  ---
+  duration_ms: 0.636708
+  type: 'test'
+  ...
+# Subtest: requireRole allows a role in the allowed list
+ok 7 - requireRole allows a role in the allowed list
+  ---
+  duration_ms: 0.115703
+  type: 'test'
+  ...
+# Subtest: isEligible rejects non-approved players regardless of fraud score
+ok 8 - isEligible rejects non-approved players regardless of fraud score
+  ---
+  duration_ms: 0.938137
+  type: 'test'
+  ...
+# Subtest: isEligible rejects players above the fraud threshold, keeps borderline ones
+ok 9 - isEligible rejects players above the fraud threshold, keeps borderline ones
+  ---
+  duration_ms: 0.167219
+  type: 'test'
+  ...
+# Subtest: calculateScore rewards a position match
+ok 10 - calculateScore rewards a position match
+  ---
+  duration_ms: 0.232386
+  type: 'test'
+  ...
+# Subtest: calculateScore does not penalize players when a scout has no stated preferences
+ok 11 - calculateScore does not penalize players when a scout has no stated preferences
+  ---
+  duration_ms: 0.119819
+  type: 'test'
+  ...
+# Subtest: calculateScore gives verification a small capped trust signal, not a dominant ranking boost
+ok 12 - calculateScore gives verification a small capped trust signal, not a dominant ranking boost
+  ---
+  duration_ms: 0.212716
+  type: 'test'
+  ...
+# Subtest: calculateScore rewards higher quality and profile completeness
+ok 13 - calculateScore rewards higher quality and profile completeness
+  ---
+  duration_ms: 0.116383
+  type: 'test'
+  ...
+# Subtest: calculateScore rewards recent engagement with diminishing returns
+ok 14 - calculateScore rewards recent engagement with diminishing returns
+  ---
+  duration_ms: 0.188851
+  type: 'test'
+  ...
+# Subtest: calculateScore applies the boost bonus only while featured_until is in the future
+ok 15 - calculateScore applies the boost bonus only while featured_until is in the future
+  ---
+  duration_ms: 0.137154
+  type: 'test'
+  ...
+# Subtest: calculateScore applies a heavy fraud penalty
+ok 16 - calculateScore applies a heavy fraud penalty
+  ---
+  duration_ms: 0.251584
+  type: 'test'
+  ...
+# Subtest: applyDiversity penalizes the 4th+ same-country result but leaves the top 3 untouched
+ok 17 - applyDiversity penalizes the 4th+ same-country result but leaves the top 3 untouched
+  ---
+  duration_ms: 0.435057
+  type: 'test'
+  ...
+# Subtest: rankPlayers excludes ineligible players and diversifies the country spread
+ok 18 - rankPlayers excludes ineligible players and diversifies the country spread
+  ---
+  duration_ms: 0.306586
+  type: 'test'
+  ...
+# Subtest: computeFraudScore is 0 with no events and rises as distinct IPs/devices shrink relative to volume
+ok 19 - computeFraudScore is 0 with no events and rises as distinct IPs/devices shrink relative to volume
+  ---
+  duration_ms: 0.142262
+  type: 'test'
+  ...
+# Subtest: health endpoint contract is present
+ok 20 - health endpoint contract is present
+  ---
+  duration_ms: 0.757748
+  type: 'test'
+  ...
+# Subtest: health endpoint runtime smoke test (when backend dependencies are installed)
+ok 21 - health endpoint runtime smoke test (when backend dependencies are installed) # SKIP Express dependencies are not installed in this source-only environment
+  ---
+  duration_ms: 0.371623
+  type: 'test'
+  ...
+# Subtest: migration chain is contiguous through 027
+ok 22 - migration chain is contiguous through 027
+  ---
+  duration_ms: 1.084544
+  type: 'test'
+  ...
+# Subtest: Flutter runtime configuration cannot fail merely because .env is absent
+ok 23 - Flutter runtime configuration cannot fail merely because .env is absent
+  ---
+  duration_ms: 0.363441
+  type: 'test'
+  ...
+# Subtest: required platform surfaces have implementation files
+ok 24 - required platform surfaces have implementation files
+  ---
+  duration_ms: 0.49723
+  type: 'test'
+  ...
+# Subtest: video remains explicitly gated instead of pretending storage exists
+ok 25 - video remains explicitly gated instead of pretending storage exists
+  ---
+  duration_ms: 0.282841
+  type: 'test'
+  ...
+# Subtest: profile appearance rewards a complete profile and stays separate from verification
+ok 26 - profile appearance rewards a complete profile and stays separate from verification
+  ---
+  duration_ms: 0.659632
+  type: 'test'
+  ...
+# Subtest: likes are logarithmic and capped at the recognition ceiling
+ok 27 - likes are logarithmic and capped at the recognition ceiling
+  ---
+  duration_ms: 0.172677
+  type: 'test'
+  ...
+# Subtest: verified endorsements are capped at five
+ok 28 - verified endorsements are capped at five
+  ---
+  duration_ms: 0.113899
+  type: 'test'
+  ...
+# Subtest: trust score does not contain payment or boost state
+ok 29 - trust score does not contain payment or boost state
+  ---
+  duration_ms: 0.140709
+  type: 'test'
+  ...
+# Subtest: fraud lowers trust without creating a badge decision
+ok 30 - fraud lowers trust without creating a badge decision
+  ---
+  duration_ms: 0.16132
+  type: 'test'
+  ...
+# Subtest: verification evidence recommends review but never auto-awards
+ok 31 - verification evidence recommends review but never auto-awards
+  ---
+  duration_ms: 0.220017
+  type: 'test'
+  ...
+# Subtest: role badges are fixed and not user-selectable
+ok 32 - role badges are fixed and not user-selectable
+  ---
+  duration_ms: 0.133018
+  type: 'test'
+  ...
+# Subtest: safety gate prevents risky candidates from ranking
+ok 33 - safety gate prevents risky candidates from ranking
+  ---
+  duration_ms: 0.794753
+  type: 'test'
+  ...
+# Subtest: relationship is meaningful but not dominant over safety
+ok 34 - relationship is meaningful but not dominant over safety
+  ---
+  duration_ms: 0.165707
+  type: 'test'
+  ...
+# Subtest: ranker diversifies repeated authors
+ok 35 - ranker diversifies repeated authors
+  ---
+  duration_ms: 0.307598
+  type: 'test'
+  ...
+# Subtest: v2 rewards relationship and meaningful quality
+ok 36 - v2 rewards relationship and meaningful quality
+  ---
+  duration_ms: 0.792319
+  type: 'test'
+  ...
+# Subtest: v2 hard safety gate rejects severe risk
+ok 37 - v2 hard safety gate rejects severe risk
+  ---
+  duration_ms: 0.139618
+  type: 'test'
+  ...
+# Subtest: v2 negative signals outrank popularity
+ok 38 - v2 negative signals outrank popularity
+  ---
+  duration_ms: 0.121751
+  type: 'test'
+  ...
+# Subtest: ships storage gate and processing pipeline schema
+ok 39 - ships storage gate and processing pipeline schema
+  ---
+  duration_ms: 0.703477
+  type: 'test'
+  ...
+# Subtest: never enables cloud storage by default
+ok 40 - never enables cloud storage by default
+  ---
+  duration_ms: 0.209412
+  type: 'test'
+  ...
+1..40
+# tests 40
+# suites 0
+# pass 39
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 282.45133

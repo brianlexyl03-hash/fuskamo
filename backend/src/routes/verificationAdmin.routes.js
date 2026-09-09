@@ -1,0 +1,10 @@
+const express=require('express');
+const router=express.Router();
+const controller=require('../controllers/verificationAdminController');
+const adminAuth=require('../authentication/adminAuth');
+const {requirePermission}=require('../authorization/permissions');
+const {adminActionLimiter}=require('../middleware/adminRateLimiter');
+router.get('/pending',adminAuth,requirePermission('verification','manage'),controller.listPending);
+router.post('/:id/domain-check',adminAuth,requirePermission('verification','manage'),adminActionLimiter,controller.verifyDomain);
+router.post('/:id/review',adminAuth,requirePermission('verification','manage'),adminActionLimiter,controller.review);
+module.exports=router;
