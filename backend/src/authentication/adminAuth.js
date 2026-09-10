@@ -1,9 +1,9 @@
-const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const AppError = require('../errors/AppError');
 const { getSupabaseAdmin } = require('../config/supabase');
 const { auditLog } = require('../utils/auditLogger');
 const logger = require('../utils/logger');
+const { verifySupabaseJwt } = require('./verifySupabaseJwt');
 
 /**
  * Replaces the old shared ADMIN_API_KEY entirely. Every administrator signs
@@ -41,7 +41,7 @@ module.exports = async function adminAuth(req, res, next) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, env.supabase.jwtSecret, { algorithms: ['HS256'] });
+      decoded = await verifySupabaseJwt(token);
     } catch (e) {
       return next(new AppError('Invalid or expired session', 401));
     }
