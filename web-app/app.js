@@ -27,7 +27,6 @@ function saveConfigAndReload() {
     SUPABASE_URL: document.getElementById('cfg-url').value.trim(),
     SUPABASE_ANON_KEY: document.getElementById('cfg-anon').value.trim(),
     BACKEND_BASE_URL: document.getElementById('cfg-backend').value.trim(),
-    BACKEND_API_KEY: document.getElementById('cfg-apikey').value.trim(),
   };
   if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || !cfg.BACKEND_BASE_URL) {
     alert('Supabase URL, anon key, and backend URL are required.');
