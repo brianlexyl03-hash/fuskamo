@@ -24,6 +24,7 @@
     "axios": "^1.7.2",
     "jsonwebtoken": "^9.0.2",
     "jose": "^5.9.6",
+    "ws": "^8.18.0",
     "express-rate-limit": "^7.4.0",
     "express-slow-down": "^2.0.3",
     "express-validator": "^7.1.0",

@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 const env = require('./env');
 const logger = require('../utils/logger');
 
@@ -16,7 +17,13 @@ function getSupabaseAdmin() {
     logger.warn('Supabase admin client requested but SUPABASE_URL/SERVICE_ROLE_KEY are not set.');
     return null;
   }
-  client = createClient(env.supabase.url, env.supabase.serviceRoleKey);
+  // supabase-js always constructs an internal Realtime client, which on
+  // Node < 22 needs an explicit WebSocket implementation passed in (Node
+  // has no native WebSocket support until v22). This admin client never
+  // subscribes to realtime channels, so we just satisfy the constructor.
+  client = createClient(env.supabase.url, env.supabase.serviceRoleKey, {
+    realtime: { transport: WebSocket },
+  });
   return client;
 }
 
