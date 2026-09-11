@@ -4,6 +4,8 @@
 backend/.env
 backend/.env.*
 !backend/.env.example
+web-app/config.js
+!web-app/config.example.js
 android/key.properties
 *.jks
 *.keystore
