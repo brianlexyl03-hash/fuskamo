@@ -2,9 +2,18 @@
 // the same Supabase project (RLS-governed) and the same backend API for
 // privileged operations (M-Pesa, AI summaries, universal search).
 
+// config.js (gitignored, for local dev) sets window.FUSKAMO_CONFIG. On a
+// fresh deploy that file won't exist, so fall back to a one-time browser
+// setup screen (same pattern as admin-web) that stores config in
+// localStorage — never committed, never sent anywhere but this browser.
+const STORED_CFG = localStorage.getItem('fuskamo_web_config');
+if (!window.FUSKAMO_CONFIG && STORED_CFG) {
+  window.FUSKAMO_CONFIG = JSON.parse(STORED_CFG);
+}
 if (!window.FUSKAMO_CONFIG || !window.FUSKAMO_CONFIG.SUPABASE_URL) {
-  document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;color:#fff;background:#050505;min-height:100vh">Missing config.js — copy config.example.js to config.js and fill in your Supabase URL/anon key and backend URL.</div>';
-  throw new Error('FUSKAMO_CONFIG missing');
+  document.getElementById('config-setup').style.display = 'block';
+  document.getElementById('app-root').style.display = 'none';
+  throw new Error('FUSKAMO_CONFIG missing — showing setup screen');
 }
 
 const CFG = window.FUSKAMO_CONFIG;
@@ -13,11 +22,27 @@ const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY)
 let CURRENT_USER = null;   // Supabase auth user
 let CURRENT_PROFILE = null; // row from profiles table
 
+function saveConfigAndReload() {
+  const cfg = {
+    SUPABASE_URL: document.getElementById('cfg-url').value.trim(),
+    SUPABASE_ANON_KEY: document.getElementById('cfg-anon').value.trim(),
+    BACKEND_BASE_URL: document.getElementById('cfg-backend').value.trim(),
+    BACKEND_API_KEY: document.getElementById('cfg-apikey').value.trim(),
+  };
+  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || !cfg.BACKEND_BASE_URL) {
+    alert('Supabase URL, anon key, and backend URL are required.');
+    return;
+  }
+  localStorage.setItem('fuskamo_web_config', JSON.stringify(cfg));
+  location.reload();
+}
+
 // ---------- Toast ----------
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
+
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 2400);
 }
