@@ -115,10 +115,32 @@ async function doSignIn() {
   const email = document.getElementById('signin-email').value.trim();
   const password = document.getElementById('signin-password').value;
   const errEl = document.getElementById('auth-error');
+  errEl.style.color = 'var(--red)';
   errEl.textContent = '';
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { errEl.textContent = error.message; return; }
   await bootAfterAuth();
+}
+function showForgotPassword() {
+  const box = document.getElementById('forgot-password-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('forgot-email').value = document.getElementById('signin-email').value;
+}
+async function submitForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const errEl = document.getElementById('auth-error');
+  if (!email) { errEl.style.color = 'var(--red)'; errEl.textContent = 'Enter your email first.'; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+  errEl.style.color = error ? 'var(--red)' : 'var(--green)';
+  errEl.textContent = error ? error.message : 'Reset link sent — check your email.';
+}
+async function doResendConfirmation() {
+  const email = document.getElementById('signin-email').value.trim();
+  const errEl = document.getElementById('auth-error');
+  if (!email) { errEl.style.color = 'var(--red)'; errEl.textContent = 'Enter your email above first.'; return; }
+  const { error } = await sb.auth.resend({ type: 'signup', email });
+  errEl.style.color = error ? 'var(--red)' : 'var(--green)';
+  errEl.textContent = error ? error.message : 'Confirmation email resent — check your inbox (and spam).';
 }
 async function doSignUp() {
   const name = document.getElementById('signup-name').value.trim();
