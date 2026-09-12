@@ -135,4 +135,33 @@ label { display: block; font-size: 12px; color: var(--sub); margin-bottom: 6px; 
 .reel-card video, .reel-card img { width: 100%; height: 100%; object-fit: cover; }
 .reel-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px; background: linear-gradient(transparent, rgba(0,0,0,0.85)); }
 
+/* ---------- Group cards / community-style header ---------- */
+.group-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; cursor: pointer; }
+.group-card .top { display: flex; gap: 12px; }
+.group-avatar { width: 52px; height: 52px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue'; font-size: 20px; color: var(--green); overflow: hidden; flex-shrink: 0; }
+.group-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.group-name-row { display: flex; align-items: center; gap: 6px; }
+.lock-ic { font-size: 11px; color: var(--sub); }
+.host-stack { display: flex; margin-top: 10px; align-items: center; gap: 8px; }
+.host-stack .avatars { display: flex; }
+.host-stack .avatars .avatar { margin-left: -8px; border: 2px solid var(--card); }
+.host-stack .avatars .avatar:first-child { margin-left: 0; }
+.count-pill { background: var(--green); color: var(--black); font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 12px; margin-left: auto; }
+
+.group-header-banner { border-radius: 12px; padding: 20px 16px; margin-bottom: 14px; position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(0,230,100,0.18), rgba(15,15,15,0.9)); border: 1px solid var(--border); }
+.group-header-banner .group-avatar { width: 64px; height: 64px; border-radius: 14px; font-size: 24px; margin-bottom: 10px; }
+.stat-strip { display: flex; gap: 18px; margin-top: 10px; }
+.stat-strip .stat b { font-family: 'Bebas Neue'; font-size: 18px; color: var(--green); display: block; }
+.stat-strip .stat span { font-size: 11px; color: var(--sub); }
+
+.post-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+.post-card.pinned { border-color: var(--amber); }
+.pin-flag { color: var(--amber); font-size: 11px; font-weight: 600; margin-bottom: 6px; }
+.reaction-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.reaction-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 3px 9px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.reaction-pill.mine { background: rgba(0,230,100,0.15); border-color: var(--green); }
+.reaction-add { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 3px 9px; font-size: 13px; cursor: pointer; color: var(--sub); }
+.emoji-picker { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 6px 10px; position: absolute; margin-top: 4px; z-index: 10; }
+.emoji-picker span { cursor: pointer; font-size: 18px; }
+
 @media (max-width: 380px) { .grid-2 { grid-template-columns: 1fr; } }

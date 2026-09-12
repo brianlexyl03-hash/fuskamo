@@ -438,19 +438,41 @@ async function saveScoutPrefs(id) {
 }
 
 // ---------- GROUPS ----------
+async function fetchHostsForGroups(groupIds) {
+  if (!groupIds.length) return {};
+  const { data } = await sb.from('group_members').select('group_id,user_id,role').in('group_id', groupIds).in('role', ['owner', 'host']);
+  const byGroup = {};
+  (data || []).forEach((m) => { (byGroup[m.group_id] = byGroup[m.group_id] || []).push(m.user_id); });
+  const profiles = await fetchProfilesMap((data || []).map((m) => m.user_id));
+  return { byGroup, profiles };
+}
 RENDERERS.groups = async (el) => {
   const { data: pub } = await sb.from('groups').select('*').eq('privacy', 'public').order('member_count', { ascending: false }).limit(30);
   let mine = [];
   if (CURRENT_USER) { const { data } = await sb.from('group_members').select('groups(*)').eq('user_id', CURRENT_USER.id); mine = (data || []).map((r) => r.groups).filter(Boolean); }
+  const discover = (pub || []).filter((g) => !mine.find((m) => m.id === g.id));
+  const allGroups = [...mine, ...discover];
+  const { byGroup = {}, profiles = {} } = await fetchHostsForGroups(allGroups.map((g) => g.id));
   el.innerHTML = `<div class="row between" style="margin-bottom:14px"><h2>Groups</h2><button class="btn btn-sm" onclick="go('/create-group')">+ New</button></div>
-    ${mine.length ? `<h3 style="margin-bottom:8px">My groups</h3>${mine.map(groupCard).join('')}<div class="divider"></div>` : ''}
+    ${mine.length ? `<h3 style="margin-bottom:8px">Joined</h3>${mine.map((g) => groupCard(g, byGroup[g.id], profiles)).join('')}<div class="divider"></div>` : ''}
     <h3 style="margin-bottom:8px">Discover</h3>
-    ${(pub || []).filter((g) => !mine.find((m) => m.id === g.id)).map(groupCard).join('') || emptyHtml('No public groups yet', 'Start one!')}`;
+    ${discover.map((g) => groupCard(g, byGroup[g.id], profiles)).join('') || emptyHtml('No public groups yet', 'Start one!')}`;
 };
-function groupCard(g) {
-  return `<div class="card" onclick="go('/group/${g.id}')" style="cursor:pointer">
-    <div class="row between"><div class="row">${avatarHtml(g.avatar_url, g.name)}<div><div style="font-weight:600">${escapeHtml(g.name)}${g.verified ? ' ✓' : ''}</div><div class="muted">${escapeHtml(g.category)} · ${g.member_count} members</div></div></div></div>
+function groupCard(g, hostIds, profiles) {
+  const hosts = (hostIds || []).slice(0, 4).map((uid) => profiles[uid]).filter(Boolean);
+  return `<div class="group-card" onclick="go('/group/${g.id}')">
+    <div class="top">
+      <div class="group-avatar">${g.avatar_url ? `<img src="${escapeHtml(g.avatar_url)}">` : initials(g.name)}</div>
+      <div style="flex:1">
+        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? ' ✓' : ''}${g.privacy !== 'public' ? `<span class="lock-ic">🔒</span>` : ''}</div>
+        <div class="muted">${g.host_count} host${g.host_count === 1 ? '' : 's'} · ${g.member_count} members</div>
+      </div>
+    </div>
     ${g.description ? `<p class="muted" style="margin-top:8px">${escapeHtml(g.description)}</p>` : ''}
+    <div class="host-stack">
+      ${hosts.length ? `<div class="avatars">${hosts.map((h) => avatarHtml(h.avatar_url, h.display_name, 'sm')).join('')}</div>` : ''}
+      <span class="count-pill">${g.member_count}</span>
+    </div>
   </div>`;
 }
 RENDERERS['create-group'] = async (el) => {
@@ -477,23 +499,64 @@ async function createGroup() {
   toast('Group created');
   go('/group/' + data.id);
 }
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '⚽'];
 RENDERERS.group = async (el, id) => {
   const { data: group } = await sb.from('groups').select('*').eq('id', id).single();
   if (!group) { el.innerHTML = emptyHtml('Group not found', ''); return; }
   let myMembership = null;
   if (CURRENT_USER) { const { data } = await sb.from('group_members').select('*').eq('group_id', id).eq('user_id', CURRENT_USER.id).maybeSingle(); myMembership = data; }
   const { data: messages } = await sb.from('group_messages').select('*').eq('group_id', id).is('deleted_at', null).order('created_at', { ascending: false }).limit(40);
+  const { data: pins } = await sb.from('group_pins').select('message_id').eq('group_id', id);
+  const pinnedIds = new Set((pins || []).map((p) => p.message_id).filter(Boolean));
+  const msgIds = (messages || []).map((m) => m.id);
+  const { data: reactions } = msgIds.length ? await sb.from('group_message_reactions').select('*').in('message_id', msgIds) : { data: [] };
+  const reactionsByMsg = {};
+  (reactions || []).forEach((r) => { (reactionsByMsg[r.message_id] = reactionsByMsg[r.message_id] || []).push(r); });
   const profiles = await fetchProfilesMap((messages || []).map((m) => m.sender_id));
   const canAdmin = myMembership && ['owner', 'host', 'moderator'].includes(myMembership.role);
-  el.innerHTML = `<div class="row between" style="margin-bottom:10px">
-      <div class="row">${avatarHtml(group.avatar_url, group.name)}<div><h2>${escapeHtml(group.name)}</h2><span class="muted">${group.member_count} members</span></div></div>
-      ${canAdmin ? `<button class="btn-sm secondary" onclick="go('/group-admin/${id}')">Manage</button>` : ''}
+  const ordered = (messages || []).slice().sort((a, b) => (pinnedIds.has(b.id) - pinnedIds.has(a.id)) || new Date(b.created_at) - new Date(a.created_at)).reverse();
+  el.innerHTML = `<div class="group-header-banner">
+      <div class="group-avatar">${group.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}">` : initials(group.name)}</div>
+      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? ' ✓' : ''}${group.privacy !== 'public' ? `<span class="lock-ic">🔒 ${group.privacy}</span>` : ''}</div>
+      <p class="muted">${escapeHtml(group.description || '')}</p>
+      <div class="stat-strip"><div class="stat"><b>${group.host_count}</b><span>hosts</span></div><div class="stat"><b>${group.member_count}</b><span>members</span></div><div class="stat"><b>${group.message_count}</b><span>posts</span></div></div>
+      <div class="row between" style="margin-top:12px">
+        ${myMembership ? '' : `<button class="btn" onclick="joinGroup('${id}', ${group.join_approval})">${group.join_approval ? 'Request to join' : 'Join group'}</button>`}
+        ${canAdmin ? `<button class="btn-sm secondary" onclick="go('/group-admin/${id}')">Manage</button>` : ''}
+      </div>
     </div>
-    <p class="muted" style="margin-bottom:12px">${escapeHtml(group.description || '')}</p>
-    ${myMembership ? '' : `<button class="btn" onclick="joinGroup('${id}', ${group.join_approval})" style="margin-bottom:14px">${group.join_approval ? 'Request to join' : 'Join group'}</button>`}
-    ${myMembership ? `<div class="card"><textarea id="gm-input" placeholder="Message the group..." rows="2"></textarea><button class="btn btn-sm" onclick="sendGroupMessage('${id}')">Send</button></div>` : ''}
-    <div style="margin-top:14px">${(messages || []).slice().reverse().map((m) => `<div class="card"><div class="row between">${authorLine(profiles[m.sender_id] || { display_name: m.sender_name }, m.created_at)}</div><p style="margin-top:4px">${escapeHtml(m.content)}</p></div>`).join('') || emptyHtml('No messages yet', 'Say hello!')}</div>`;
+    ${myMembership ? `<div class="card"><textarea id="gm-input" placeholder="Post to the group..." rows="2"></textarea><button class="btn btn-sm" onclick="sendGroupMessage('${id}')">Post</button></div>` : ''}
+    <div style="margin-top:14px">${ordered.map((m) => groupPostHtml(m, profiles[m.sender_id] || { display_name: m.sender_name }, reactionsByMsg[m.id] || [], pinnedIds.has(m.id))).join('') || emptyHtml('No posts yet', 'Be the first to post!')}</div>`;
 };
+function groupPostHtml(m, profile, msgReactions, isPinned) {
+  const counts = {};
+  msgReactions.forEach((r) => { counts[r.emoji] = counts[r.emoji] || { n: 0, mine: false }; counts[r.emoji].n++; if (r.user_id === CURRENT_USER?.id) counts[r.emoji].mine = true; });
+  return `<div class="post-card ${isPinned ? 'pinned' : ''}">
+    ${isPinned ? `<div class="pin-flag">📌 Pinned</div>` : ''}
+    ${authorLine(profile, m.created_at)}
+    <p style="margin-top:6px">${escapeHtml(m.content)}</p>
+    <div class="reaction-row" id="reactions-${m.id}">
+      ${Object.entries(counts).map(([emoji, c]) => `<span class="reaction-pill ${c.mine ? 'mine' : ''}" onclick="toggleReaction('${m.id}','${emoji}',this)">${emoji} ${c.n}</span>`).join('')}
+      <span class="reaction-add" onclick="openEmojiPicker('${m.id}', this)">+ react</span>
+    </div>
+  </div>`;
+}
+let openPicker = null;
+function openEmojiPicker(msgId, addEl) {
+  if (openPicker) { openPicker.remove(); openPicker = null; }
+  const picker = document.createElement('div');
+  picker.className = 'emoji-picker';
+  picker.innerHTML = REACTION_EMOJIS.map((e) => `<span onclick="toggleReaction('${msgId}','${e}',null);this.parentElement.remove()">${e}</span>`).join('');
+  addEl.parentElement.appendChild(picker);
+  openPicker = picker;
+}
+async function toggleReaction(msgId, emoji, pillEl) {
+  if (!requireAuth()) return;
+  const isMine = pillEl && pillEl.classList.contains('mine');
+  if (isMine) await sb.from('group_message_reactions').delete().eq('message_id', msgId).eq('user_id', CURRENT_USER.id).eq('emoji', emoji);
+  else await sb.from('group_message_reactions').insert({ message_id: msgId, user_id: CURRENT_USER.id, emoji });
+  router();
+}
 async function joinGroup(groupId, needsApproval) {
   if (!requireAuth()) return;
   if (needsApproval) {
