@@ -11,7 +11,7 @@ if (!window.FUSKAMO_CONFIG && STORED_CFG) {
   window.FUSKAMO_CONFIG = JSON.parse(STORED_CFG);
 }
 if (!window.FUSKAMO_CONFIG || !window.FUSKAMO_CONFIG.SUPABASE_URL) {
-  document.getElementById('config-setup').style.display = 'block';
+  document.getElementById('config-setup').style.display = 'flex';
   document.getElementById('app-root').style.display = 'none';
   throw new Error('FUSKAMO_CONFIG missing — showing setup screen');
 }
@@ -94,7 +94,7 @@ async function router() {
   try {
     await RENDERERS[path](el, param);
   } catch (e) {
-    el.innerHTML = `<div class="empty"><div class="big">⚠</div><p>${escapeHtml(e.message || 'Something went wrong loading this screen.')}</p></div>`;
+    el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg><p>${escapeHtml(e.message || 'Something went wrong loading this screen.')}</p></div>`;
   }
 }
 window.addEventListener('hashchange', router);
@@ -273,9 +273,9 @@ function feedPostHtml(p, profile, isLiked) {
     ${p.body ? `<p style="margin:8px 0">${escapeHtml(p.body)}</p>` : ''}
     ${p.media_url ? (p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;border-radius:8px;margin:8px 0"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;border-radius:8px;margin:8px 0">`) : ''}
     <div class="row" style="gap:18px;margin-top:8px">
-      <span onclick="togglePostLike('${p.id}', this)" style="cursor:pointer;color:${isLiked ? 'var(--green)' : 'var(--sub)'}" data-liked="${isLiked}">♥ <span class="cnt">${p.like_count}</span></span>
-      <span class="muted">💬 ${p.comment_count}</span>
-      <span class="muted">↻ ${p.repost_count}</span>
+      <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}"><svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg><span class="cnt">${p.like_count}</span></span>
+      <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
+      <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
     </div>
   </div>`;
 }
@@ -297,10 +297,10 @@ async function togglePostLike(postId, span) {
   const cnt = span.querySelector('.cnt');
   cnt.textContent = parseInt(cnt.textContent) + (liked ? -1 : 1);
   span.dataset.liked = (!liked).toString();
-  span.style.color = liked ? 'var(--sub)' : 'var(--green)';
+  span.classList.toggle('liked', !liked);
 }
 function requireAuth() { if (!CURRENT_USER) { toast('Sign in first'); return false; } return true; }
-function emptyHtml(title, sub) { return `<div class="empty"><div class="big">⚽</div><p>${title}</p><p class="muted">${sub}</p></div>`; }
+function emptyHtml(title, sub) { return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7l3.5 2.5-1.3 4.2h-4.4L8.5 9.5 12 7zM12 3v4M4.6 8l3.9 1.5M4.6 16l3.9-1.5M19.4 8l-3.9 1.5M19.4 16l-3.9-1.5M12 21v-4"/></svg><p>${title}</p><p class="muted">${sub}</p></div>`; }
 
 // ---------- DISCOVER ----------
 let discoverFilters = { position: '', country: '' };
@@ -464,7 +464,7 @@ function groupCard(g, hostIds, profiles) {
     <div class="top">
       <div class="group-avatar">${g.avatar_url ? `<img src="${escapeHtml(g.avatar_url)}">` : initials(g.name)}</div>
       <div style="flex:1">
-        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? ' ✓' : ''}${g.privacy !== 'public' ? `<span class="lock-ic">🔒</span>` : ''}</div>
+        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? ' ✓' : ''}${g.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>` : ''}</div>
         <div class="muted">${g.host_count} host${g.host_count === 1 ? '' : 's'} · ${g.member_count} members</div>
       </div>
     </div>
@@ -517,7 +517,7 @@ RENDERERS.group = async (el, id) => {
   const ordered = (messages || []).slice().sort((a, b) => (pinnedIds.has(b.id) - pinnedIds.has(a.id)) || new Date(b.created_at) - new Date(a.created_at)).reverse();
   el.innerHTML = `<div class="group-header-banner">
       <div class="group-avatar">${group.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}">` : initials(group.name)}</div>
-      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? ' ✓' : ''}${group.privacy !== 'public' ? `<span class="lock-ic">🔒 ${group.privacy}</span>` : ''}</div>
+      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? ' ✓' : ''}${group.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${group.privacy}</span>` : ''}</div>
       <p class="muted">${escapeHtml(group.description || '')}</p>
       <div class="stat-strip"><div class="stat"><b>${group.host_count}</b><span>hosts</span></div><div class="stat"><b>${group.member_count}</b><span>members</span></div><div class="stat"><b>${group.message_count}</b><span>posts</span></div></div>
       <div class="row between" style="margin-top:12px">
@@ -532,7 +532,7 @@ function groupPostHtml(m, profile, msgReactions, isPinned) {
   const counts = {};
   msgReactions.forEach((r) => { counts[r.emoji] = counts[r.emoji] || { n: 0, mine: false }; counts[r.emoji].n++; if (r.user_id === CURRENT_USER?.id) counts[r.emoji].mine = true; });
   return `<div class="post-card ${isPinned ? 'pinned' : ''}">
-    ${isPinned ? `<div class="pin-flag">📌 Pinned</div>` : ''}
+    ${isPinned ? `<div class="pin-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6z"/></svg> Pinned</div>` : ''}
     ${authorLine(profile, m.created_at)}
     <p style="margin-top:6px">${escapeHtml(m.content)}</p>
     <div class="reaction-row" id="reactions-${m.id}">
@@ -658,7 +658,7 @@ RENDERERS.reels = async (el) => {
   el.innerHTML = (reels || []).map((r) => `<div class="reel-card">
       <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} controls></video>
       <div class="reel-overlay">${authorLine(profiles[r.author_id], r.created_at)}<p style="margin:4px 0">${escapeHtml(r.caption)}</p>
-        <span onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}" style="color:${liked.has(r.id) ? 'var(--green)' : '#fff'}">♥ <span class="cnt">${r.like_count}</span></span>
+        <span class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}" style="color:${liked.has(r.id) ? 'var(--green)' : '#fff'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg><span class="cnt">${r.like_count}</span></span>
       </div>
     </div>`).join('') || emptyHtml('No reels yet', '');
 };
@@ -670,6 +670,7 @@ async function toggleReelLike(reelId, span) {
   const cnt = span.querySelector('.cnt');
   cnt.textContent = parseInt(cnt.textContent) + (liked ? -1 : 1);
   span.dataset.liked = (!liked).toString();
+  span.classList.toggle('liked', !liked);
   span.style.color = liked ? '#fff' : 'var(--green)';
 }
 
@@ -740,12 +741,12 @@ RENDERERS.profile = async (el) => {
       <button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button>
       <button class="btn secondary" onclick="go('/analytics')">Analytics</button>
     </div>
-    <div class="settings-link" onclick="go('/account-settings')"><span>Account settings</span><span>›</span></div>
-    <div class="settings-link" onclick="go('/security-settings')"><span>Security</span><span>›</span></div>
-    <div class="settings-link" onclick="go('/story-settings')"><span>New story</span><span>›</span></div>
-    <div class="settings-link" onclick="go('/verification')"><span>Get verified</span><span>›</span></div>
-    <div class="settings-link" onclick="go('/moderation')"><span>My reports</span><span>›</span></div>
-    <div class="settings-link" onclick="go('/mfa-setup')"><span>Two-factor authentication</span><span>›</span></div>
+    <div class="settings-link" onclick="go('/account-settings')"><span>Account settings</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+    <div class="settings-link" onclick="go('/security-settings')"><span>Security</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+    <div class="settings-link" onclick="go('/story-settings')"><span>New story</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+    <div class="settings-link" onclick="go('/verification')"><span>Get verified</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+    <div class="settings-link" onclick="go('/moderation')"><span>My reports</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+    <div class="settings-link" onclick="go('/mfa-setup')"><span>Two-factor authentication</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
     <button class="btn danger" style="margin-top:16px" onclick="signOut()">Sign out</button>`;
 };
 

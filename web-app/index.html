@@ -9,17 +9,19 @@
 </head>
 <body>
 
-<div id="config-setup" style="display:none;max-width:420px;margin:60px auto;padding:24px;font-family:'Inter',sans-serif;color:#F0F0F0">
-  <h1 style="font-family:'Bebas Neue',sans-serif;color:#00E664;font-size:28px;margin-bottom:4px">FUSKAMO</h1>
-  <p style="color:#777;margin-bottom:20px">One-time setup — connect this browser to your FUSKAMO backend.</p>
+<div id="config-setup" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px">
+  <div style="max-width:380px;width:100%;font-family:'Inter',sans-serif;color:#F0F0F0">
+  <h1 style="font-family:'Bebas Neue',sans-serif;color:#00E664;font-size:28px;letter-spacing:1px;margin-bottom:4px">FUSKAMO</h1>
+  <p style="color:#777;margin-bottom:22px;font-size:14px">One-time setup — connect this browser to your FUSKAMO backend.</p>
   <label style="display:block;font-size:12px;color:#777;margin-bottom:6px">SUPABASE URL</label>
-  <input id="cfg-url" placeholder="https://xxxx.supabase.co" style="width:100%;background:#131313;border:1px solid #1F1F1F;border-radius:8px;color:#fff;padding:10px 12px;margin-bottom:14px">
+  <input id="cfg-url" placeholder="https://xxxx.supabase.co" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--line-strong);border-radius:var(--r-sm);color:#fff;padding:11px 13px;margin-bottom:14px">
   <label style="display:block;font-size:12px;color:#777;margin-bottom:6px">SUPABASE ANON KEY</label>
-  <input id="cfg-anon" placeholder="eyJ..." style="width:100%;background:#131313;border:1px solid #1F1F1F;border-radius:8px;color:#fff;padding:10px 12px;margin-bottom:14px">
+  <input id="cfg-anon" placeholder="eyJ..." style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--line-strong);border-radius:var(--r-sm);color:#fff;padding:11px 13px;margin-bottom:14px">
   <label style="display:block;font-size:12px;color:#777;margin-bottom:6px">BACKEND URL</label>
-  <input id="cfg-backend" placeholder="https://your-backend.onrender.com" style="width:100%;background:#131313;border:1px solid #1F1F1F;border-radius:8px;color:#fff;padding:10px 12px;margin-bottom:18px">
-  <button onclick="saveConfigAndReload()" style="width:100%;background:#00E664;color:#050505;border:none;border-radius:8px;padding:11px;font-family:'Bebas Neue';font-size:16px;cursor:pointer">Continue</button>
-  <p style="color:#777;font-size:11px;margin-top:14px">Saved in this browser only — never sent anywhere but this browser talking directly to Supabase/your backend.</p>
+  <input id="cfg-backend" placeholder="https://your-backend.onrender.com" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--line-strong);border-radius:var(--r-sm);color:#fff;padding:11px 13px;margin-bottom:20px">
+  <button onclick="saveConfigAndReload()" style="width:100%;background:#00E664;color:#050505;border:none;border-radius:999px;padding:12px;font-family:'Bebas Neue';font-size:16px;letter-spacing:0.4px;cursor:pointer">Continue</button>
+  <p style="color:#777;font-size:11px;margin-top:14px;line-height:1.5">Saved in this browser only — never sent anywhere but this browser talking directly to Supabase/your backend.</p>
+  </div>
 </div>
 
 <div id="app-root">
@@ -27,8 +29,8 @@
   <div class="topbar">
     <a href="#/feed" class="brand">FUSKAMO</a>
     <div class="actions">
-      <button class="icon-btn" onclick="go('/search')">🔍</button>
-      <button class="icon-btn" onclick="go('/notifications')">🔔</button>
+      <button class="icon-btn" onclick="go('/search')" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+      <button class="icon-btn" onclick="go('/notifications')" aria-label="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
     </div>
   </div>
 
@@ -106,12 +108,12 @@
   <div id="view-mfa-setup" class="view"></div>
 
   <div class="bottom-nav" id="bottom-nav">
-    <button class="nav-tab" data-tab="feed" onclick="go('/feed')"><span class="ic">🏠</span><span class="lb">Feed</span></button>
-    <button class="nav-tab" data-tab="discover" onclick="go('/discover')"><span class="ic">🌍</span><span class="lb">Discover</span></button>
-    <button class="nav-tab fab" onclick="go('/upload')">+</button>
-    <button class="nav-tab" data-tab="groups" onclick="go('/groups')"><span class="ic">💬</span><span class="lb">Groups</span></button>
-    <button class="nav-tab" data-tab="scouts" onclick="go('/scouts')"><span class="ic">🕸</span><span class="lb">Scouts</span></button>
-    <button class="nav-tab" data-tab="profile" onclick="go('/profile')"><span class="ic">👤</span><span class="lb">Profile</span></button>
+    <button class="nav-tab" data-tab="feed" onclick="go('/feed')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span class="lb">Feed</span></button>
+    <button class="nav-tab" data-tab="discover" onclick="go('/discover')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 6 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-6-3.8-9S9.5 5.7 12 3z"/></svg><span class="lb">Discover</span></button>
+    <button class="nav-tab fab" onclick="go('/upload')" aria-label="Submit a player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="nav-tab" data-tab="groups" onclick="go('/groups')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><circle cx="18" cy="9" r="2.4"/><path d="M15.5 14.2c2.7.3 5 2.2 5 4.8"/></svg><span class="lb">Groups</span></button>
+    <button class="nav-tab" data-tab="scouts" onclick="go('/scouts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="14" r="4"/><circle cx="17" cy="14" r="4"/><path d="M11 14h2M9 10.5l1.5-6h3l1.5 6"/></svg><span class="lb">Scouts</span></button>
+    <button class="nav-tab" data-tab="profile" onclick="go('/profile')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="lb">Profile</span></button>
   </div>
 
 </div>
