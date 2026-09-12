@@ -218,6 +218,9 @@ function badgeHtml(badgeType, verified) {
   });
 })();
 
+// ---------- View renderers ----------
+const RENDERERS = {};
+
 // ---------- Shared data helpers ----------
 // social_posts/social_reels/etc reference auth.users(id) directly, not
 // profiles(user_id) — there's no direct FK PostgREST can embed through, so
