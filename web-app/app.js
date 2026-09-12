@@ -262,16 +262,48 @@ RENDERERS.feed = async (el) => {
   el.innerHTML = `
     <div class="card">
       <textarea id="composer-body" placeholder="Share something with the FUSKAMO community..." rows="3"></textarea>
-      <input id="composer-media" placeholder="Image/video URL (optional)">
-      <button class="btn" onclick="submitPost()">Post</button>
+      <div id="composer-preview"></div>
+      <div class="row between" style="margin-top:8px">
+        <label for="composer-file" class="btn-sm secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg> Photo/Video
+        </label>
+        <input type="file" id="composer-file" accept="image/*,video/*" style="display:none" onchange="previewComposerFile()">
+        <button class="btn" id="composer-post-btn" style="width:auto;padding:10px 24px" onclick="submitPost()">Post</button>
+      </div>
     </div>
     <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml('No posts yet', 'Be the first to share something.')}</div>`;
 };
+let composerFile = null;
+function previewComposerFile() {
+  const input = document.getElementById('composer-file');
+  composerFile = input.files[0] || null;
+  const box = document.getElementById('composer-preview');
+  if (!composerFile) { box.innerHTML = ''; return; }
+  const url = URL.createObjectURL(composerFile);
+  const isVideo = composerFile.type.startsWith('video');
+  box.innerHTML = `<div style="position:relative;margin-top:8px">
+    ${isVideo ? `<video src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px" controls></video>` : `<img src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px;object-fit:cover">`}
+    <button onclick="clearComposerFile()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer">✕</button>
+  </div>`;
+}
+function clearComposerFile() {
+  composerFile = null;
+  document.getElementById('composer-file').value = '';
+  document.getElementById('composer-preview').innerHTML = '';
+}
+async function uploadToStorage(bucket, file) {
+  const ext = file.name.split('.').pop();
+  const path = `${CURRENT_USER.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await sb.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: false });
+  if (error) throw error;
+  const { data } = sb.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
+}
 function feedPostHtml(p, profile, isLiked) {
   return `<div class="card">
     <div class="row between">${authorLine(profile, p.created_at)}</div>
     ${p.body ? `<p style="margin:8px 0">${escapeHtml(p.body)}</p>` : ''}
-    ${p.media_url ? (p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;border-radius:8px;margin:8px 0"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;border-radius:8px;margin:8px 0">`) : ''}
+    ${p.media_url ? (p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;border-radius:var(--r-sm);margin:8px 0"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`) : ''}
     <div class="row" style="gap:18px;margin-top:8px">
       <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}"><svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg><span class="cnt">${p.like_count}</span></span>
       <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
@@ -282,12 +314,24 @@ function feedPostHtml(p, profile, isLiked) {
 async function submitPost() {
   if (!requireAuth()) return;
   const body = document.getElementById('composer-body').value.trim();
-  const media = document.getElementById('composer-media').value.trim();
-  if (!body && !media) return toast('Write something or add a media URL.');
-  const { error } = await sb.from('social_posts').insert({ author_id: CURRENT_USER.id, body, media_url: media || null, media_type: media ? 'external_video' : 'none' });
-  if (error) return toast(error.message);
-  toast('Posted');
-  router();
+  if (!body && !composerFile) return toast('Write something or add a photo/video.');
+  const btn = document.getElementById('composer-post-btn');
+  btn.disabled = true; btn.textContent = 'Posting...';
+  try {
+    let mediaUrl = null, mediaType = 'none';
+    if (composerFile) {
+      mediaUrl = await uploadToStorage('post-media', composerFile);
+      mediaType = composerFile.type.startsWith('video') ? 'external_video' : 'image';
+    }
+    const { error } = await sb.from('social_posts').insert({ author_id: CURRENT_USER.id, body, media_url: mediaUrl, media_type: mediaType });
+    if (error) throw error;
+    composerFile = null;
+    toast('Posted');
+    router();
+  } catch (e) {
+    toast(e.message || 'Failed to post');
+    btn.disabled = false; btn.textContent = 'Post';
+  }
 }
 async function togglePostLike(postId, span) {
   if (!requireAuth()) return;
@@ -359,29 +403,51 @@ RENDERERS.upload = async (el) => {
     <label>Club (optional)</label><input id="up-club">
     <label>Jersey number (optional)</label><input id="up-jersey">
     <label>Strengths</label><textarea id="up-strengths" rows="3"></textarea>
-    <label>Video URL (optional — a link to existing footage)</label><input id="up-video">
-    <button class="btn" onclick="submitPlayer()">Submit for review</button>
+    <label for="up-video-file" class="btn secondary" style="cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polygon points="10,9 16,12 10,15"/></svg> Upload footage
+    </label>
+    <input type="file" id="up-video-file" accept="video/*" style="display:none" onchange="previewUploadVideo()">
+    <div id="up-video-preview"></div>
+    <p class="muted" style="margin:-4px 0 10px">or paste a link instead:</p>
+    <input id="up-video" placeholder="https://...">
+    <button class="btn" id="up-submit-btn" onclick="submitPlayer()">Submit for review</button>
     <p class="muted" style="margin-top:10px">Submissions are reviewed by FUSKAMO before appearing on Discover.</p>`;
 };
+let uploadVideoFile = null;
+function previewUploadVideo() {
+  uploadVideoFile = document.getElementById('up-video-file').files[0] || null;
+  const box = document.getElementById('up-video-preview');
+  box.innerHTML = uploadVideoFile ? `<video src="${URL.createObjectURL(uploadVideoFile)}" style="width:100%;border-radius:var(--r-sm);max-height:240px;margin-bottom:10px" controls></video>` : '';
+}
 async function submitPlayer() {
   const name = document.getElementById('up-name').value.trim();
   const position = document.getElementById('up-position').value;
   const age = parseInt(document.getElementById('up-age').value);
   const country = document.getElementById('up-country').value.trim();
   if (!name || !age || !country) return toast('Name, age, and country are required.');
-  const payload = {
-    name, position, age, country,
-    club: document.getElementById('up-club').value.trim() || null,
-    jersey_number: document.getElementById('up-jersey').value.trim() || null,
-    strengths: document.getElementById('up-strengths').value.trim() || null,
-    video_url: document.getElementById('up-video').value.trim() || null,
-    status: 'pending',
-  };
-  if (CURRENT_USER) payload.submitted_by = CURRENT_USER.id;
-  const { error } = await sb.from('players').insert(payload);
-  if (error) return toast(error.message);
-  toast('Submitted — pending review');
-  go('/profile');
+  const btn = document.getElementById('up-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  try {
+    let videoUrl = document.getElementById('up-video').value.trim() || null;
+    if (uploadVideoFile) {
+      if (!requireAuth()) { btn.disabled = false; btn.textContent = 'Submit for review'; return; }
+      videoUrl = await uploadToStorage('player-videos', uploadVideoFile);
+    }
+    const payload = {
+      name, position, age, country,
+      club: document.getElementById('up-club').value.trim() || null,
+      jersey_number: document.getElementById('up-jersey').value.trim() || null,
+      strengths: document.getElementById('up-strengths').value.trim() || null,
+      video_url: videoUrl,
+      status: 'pending',
+    };
+    if (CURRENT_USER) payload.submitted_by = CURRENT_USER.id;
+    const { error } = await sb.from('players').insert(payload);
+    if (error) throw error;
+    uploadVideoFile = null;
+    toast('Submitted — pending review');
+    go('/profile');
+  } catch (e) { toast(e.message || 'Submission failed'); btn.disabled = false; btn.textContent = 'Submit for review'; }
 }
 
 // ---------- SCOUTS ----------
@@ -488,14 +554,14 @@ async function createGroup() {
   const name = document.getElementById('cg-name').value.trim();
   if (!name || name.length < 2) return toast('Name must be at least 2 characters.');
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 39) + '-' + Math.random().toString(36).slice(2, 6);
-  const { data, error } = await sb.from('groups').insert({
-    owner_id: CURRENT_USER.id, name, slug,
-    description: document.getElementById('cg-desc').value.trim(),
-    category: document.getElementById('cg-category').value.trim() || 'General Football',
-    privacy: document.getElementById('cg-privacy').value,
-  }).select().single();
+  const { data, error } = await sb.rpc('create_group', {
+    p_name: name, p_slug: slug,
+    p_description: document.getElementById('cg-desc').value.trim(),
+    p_category: document.getElementById('cg-category').value.trim() || 'General Football',
+    p_privacy: document.getElementById('cg-privacy').value,
+    p_display_name: CURRENT_PROFILE?.display_name || 'Host',
+  });
   if (error) return toast(error.message);
-  await sb.from('group_members').insert({ group_id: data.id, user_id: CURRENT_USER.id, role: 'owner', display_name: CURRENT_PROFILE?.display_name || 'Owner' });
   toast('Group created');
   go('/group/' + data.id);
 }
@@ -655,13 +721,35 @@ RENDERERS.reels = async (el) => {
   const { data: reels } = await sb.from('social_reels').select('*').eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(20);
   const profiles = await fetchProfilesMap((reels || []).map((r) => r.author_id));
   const liked = await myLikedSet('social_reel_likes', 'reel_id', (reels || []).map((r) => r.id));
-  el.innerHTML = (reels || []).map((r) => `<div class="reel-card">
+  el.innerHTML = `
+    <div class="row between" style="margin-bottom:14px">
+      <h2>Reels</h2>
+      <label for="reel-file" class="btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Upload reel
+      </label>
+      <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">
+    </div>
+    ${(reels || []).map((r) => `<div class="reel-card">
       <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} controls></video>
       <div class="reel-overlay">${authorLine(profiles[r.author_id], r.created_at)}<p style="margin:4px 0">${escapeHtml(r.caption)}</p>
         <span class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}" style="color:${liked.has(r.id) ? 'var(--green)' : '#fff'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg><span class="cnt">${r.like_count}</span></span>
       </div>
-    </div>`).join('') || emptyHtml('No reels yet', '');
+    </div>`).join('') || emptyHtml('No reels yet', 'Be the first to upload one.')}`;
 };
+async function uploadNewReel() {
+  if (!requireAuth()) { document.getElementById('reel-file').value = ''; return; }
+  const file = document.getElementById('reel-file').files[0];
+  if (!file) return;
+  toast('Uploading reel...');
+  try {
+    const videoUrl = await uploadToStorage('reel-media', file);
+    const caption = prompt('Add a caption (optional):', '') || '';
+    const { error } = await sb.from('social_reels').insert({ author_id: CURRENT_USER.id, video_url: videoUrl, caption });
+    if (error) throw error;
+    toast('Reel posted');
+    router();
+  } catch (e) { toast(e.message || 'Upload failed'); }
+}
 async function toggleReelLike(reelId, span) {
   if (!requireAuth()) return;
   const liked = span.dataset.liked === 'true';
@@ -854,18 +942,38 @@ async function saveSecuritySettings() {
 // ---------- STORY SETTINGS (new story) ----------
 RENDERERS['story-settings'] = async (el) => {
   el.innerHTML = `<h2 style="margin-bottom:14px">New Story</h2>
-    <label>Media URL</label><input id="st-media" placeholder="Image or video link">
+    <label for="st-file" class="btn secondary" style="cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg> Choose photo or video
+    </label>
+    <input type="file" id="st-file" accept="image/*,video/*" style="display:none" onchange="previewStoryFile()">
+    <div id="st-preview"></div>
     <label>Caption</label><textarea id="st-caption" rows="2"></textarea>
     <label>Visible to</label><select id="st-vis"><option value="followers">Followers</option><option value="public">Everyone</option><option value="close_friends">Close friends</option></select>
-    <button class="btn" onclick="postStory()">Share story</button>`;
+    <button class="btn" id="st-submit-btn" onclick="postStory()">Share story</button>`;
 };
+let storyFile = null;
+function previewStoryFile() {
+  storyFile = document.getElementById('st-file').files[0] || null;
+  const box = document.getElementById('st-preview');
+  if (!storyFile) { box.innerHTML = ''; return; }
+  const url = URL.createObjectURL(storyFile);
+  box.innerHTML = storyFile.type.startsWith('video')
+    ? `<video src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px;margin-bottom:10px" controls></video>`
+    : `<img src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px;object-fit:cover;margin-bottom:10px">`;
+}
 async function postStory() {
-  const media = document.getElementById('st-media').value.trim();
-  if (!media) return toast('Add a media URL.');
-  const { error } = await sb.from('social_stories').insert({ author_id: CURRENT_USER.id, media_url: media, caption: document.getElementById('st-caption').value.trim(), visibility: document.getElementById('st-vis').value });
-  if (error) return toast(error.message);
-  toast('Story posted');
-  go('/profile');
+  if (!storyFile) return toast('Choose a photo or video first.');
+  const btn = document.getElementById('st-submit-btn');
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  try {
+    const mediaUrl = await uploadToStorage('story-media', storyFile);
+    const mediaType = storyFile.type.startsWith('video') ? 'external_video' : 'image';
+    const { error } = await sb.from('social_stories').insert({ author_id: CURRENT_USER.id, media_url: mediaUrl, media_type: mediaType, caption: document.getElementById('st-caption').value.trim(), visibility: document.getElementById('st-vis').value });
+    if (error) throw error;
+    storyFile = null;
+    toast('Story posted');
+    go('/profile');
+  } catch (e) { toast(e.message || 'Upload failed'); btn.disabled = false; btn.textContent = 'Share story'; }
 }
 
 // ---------- VERIFICATION ----------
