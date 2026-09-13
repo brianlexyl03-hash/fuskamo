@@ -274,4 +274,16 @@ label { display: block; font-size: 12px; color: var(--sub); margin-bottom: 6px; 
 .menu-sheet.show { transform: translate(-50%, 0); }
 .menu-sheet-handle { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--line-strong); margin: 6px auto 14px; }
 
+/* ---------- Swipeable group channels (General / Admin) ---------- */
+.group-channel-scroll { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -16px; }
+.group-channel-scroll::-webkit-scrollbar { display: none; }
+.group-channel-panel { min-width: 100%; scroll-snap-align: start; padding: 0 16px; }
+
+/* ---------- X-style feed ---------- */
+.composer-row { display: flex; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.composer-row textarea { border: none; background: none; padding: 8px 0; font-size: 15px; margin-bottom: 0; resize: none; }
+.composer-row textarea:focus { border: none; outline: none; }
+.tweet-row { display: flex; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.tweet-row p { font-size: 14.5px; }
+
 @media (max-width: 380px) { .grid-2 { grid-template-columns: 1fr; } }

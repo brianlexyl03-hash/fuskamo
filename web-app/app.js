@@ -64,7 +64,7 @@ const ROUTES = [
   'groups', 'group', 'create-group', 'group-admin', 'messages', 'conversation', 'message-requests',
   'reels', 'scoreboard', 'achievements', 'notifications', 'notification-preferences',
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
-  'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post',
+  'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post', 'join',
 ];
 const NAV_TABS = { feed: 'feed', discover: 'discover', groups: 'groups', scouts: 'scouts', profile: 'profile' };
 
@@ -91,10 +91,22 @@ async function router() {
   el.classList.add('active');
   el.innerHTML = '<div class="spinner"></div>';
   document.getElementById('bottom-nav').style.display = 'flex';
+  updateNavAvatar();
   try {
     await RENDERERS[path](el, param);
   } catch (e) {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg><p>${escapeHtml(e.message || 'Something went wrong loading this screen.')}</p></div>`;
+  }
+}
+function updateNavAvatar() {
+  const tab = document.querySelector('.nav-tab[data-tab="profile"]');
+  if (!tab || !CURRENT_PROFILE?.avatar_url) return;
+  const svg = tab.querySelector('svg');
+  if (svg && !tab.querySelector('img')) {
+    const img = document.createElement('img');
+    img.src = CURRENT_PROFILE.avatar_url;
+    img.style.cssText = 'width:22px;height:22px;border-radius:50%;object-fit:cover;border:1.5px solid currentColor';
+    svg.replaceWith(img);
   }
 }
 window.addEventListener('hashchange', router);
@@ -291,18 +303,42 @@ RENDERERS.feed = async (el) => {
   const { data: posts } = await sb.from('social_posts').select('*').eq('visibility', 'public').eq('status', 'published').is('reply_to_id', null).order('created_at', { ascending: false }).limit(30);
   const profiles = await fetchProfilesMap((posts || []).map((p) => p.author_id));
   const liked = await myLikedSet('social_post_likes', 'post_id', (posts || []).map((p) => p.id));
+  let mediaStrip = '';
+  if (CURRENT_USER) {
+    const { data: follows } = await sb.from('profile_follows').select('followed_id').eq('follower_id', CURRENT_USER.id);
+    const followedIds = (follows || []).map((f) => f.followed_id);
+    const { data: myLikedRows } = await sb.from('social_post_likes').select('post_id').eq('user_id', CURRENT_USER.id).limit(20);
+    const likedPostIds = (myLikedRows || []).map((r) => r.post_id);
+    let mediaPosts = [];
+    if (followedIds.length) { const { data } = await sb.from('social_posts').select('id,media_url,media_type,author_id').in('author_id', followedIds).not('media_url', 'is', null).order('created_at', { ascending: false }).limit(10); mediaPosts = mediaPosts.concat(data || []); }
+    if (likedPostIds.length) { const { data } = await sb.from('social_posts').select('id,media_url,media_type,author_id').in('id', likedPostIds).not('media_url', 'is', null).limit(10); mediaPosts = mediaPosts.concat(data || []); }
+    const seen = new Set();
+    mediaPosts = mediaPosts.filter((m) => !seen.has(m.id) && seen.add(m.id));
+    if (mediaPosts.length) {
+      mediaStrip = `<div style="margin-bottom:16px"><p class="muted" style="margin-bottom:8px;padding:0 2px">From people you follow</p>
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+          ${mediaPosts.map((m) => `<div style="flex-shrink:0;width:96px;height:96px;border-radius:var(--r-sm);overflow:hidden;cursor:pointer;background:var(--card)" onclick="go('/post/${m.id}')">
+            ${m.media_type === 'external_video' ? `<video src="${escapeHtml(m.media_url)}" style="width:100%;height:100%;object-fit:cover"></video>` : `<img src="${escapeHtml(m.media_url)}" style="width:100%;height:100%;object-fit:cover">`}
+          </div>`).join('')}
+        </div></div>`;
+    }
+  }
   el.innerHTML = `
-    <div class="card">
-      <textarea id="composer-body" placeholder="Share something with the FUSKAMO community..." rows="3"></textarea>
-      <div id="composer-preview"></div>
-      <div class="row between" style="margin-top:8px">
-        <label for="composer-file" class="btn-sm secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg> Photo/Video
-        </label>
-        <input type="file" id="composer-file" accept="image/*,video/*" style="display:none" onchange="previewComposerFile()">
-        <button class="btn" id="composer-post-btn" style="width:auto;padding:10px 24px" onclick="submitPost()">Post</button>
+    <div class="composer-row">
+      ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
+      <div style="flex:1">
+        <textarea id="composer-body" placeholder="What's happening in football?" rows="2"></textarea>
+        <div id="composer-preview"></div>
+        <div class="row between" style="margin-top:6px">
+          <label for="composer-file" class="icon-btn" style="cursor:pointer;color:var(--green)">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg>
+          </label>
+          <input type="file" id="composer-file" accept="image/*,video/*" style="display:none" onchange="previewComposerFile()">
+          <button class="btn" id="composer-post-btn" style="width:auto;padding:9px 22px" onclick="submitPost()">Post</button>
+        </div>
       </div>
     </div>
+    ${mediaStrip}
     <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml('No posts yet', 'Be the first to share something.')}</div>`;
 };
 let composerFile = null;
@@ -332,17 +368,20 @@ async function uploadToStorage(bucket, file) {
   return data.publicUrl;
 }
 function feedPostHtml(p, profile, isLiked) {
-  return `<div class="card">
-    <div class="row between">${authorLine(profile, p.created_at)}</div>
-    ${p.body ? `<p style="margin:8px 0;cursor:pointer" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
-    ${p.media_url ? `<div style="position:relative" ondblclick="dblTapLike('${p.id}', this)">
-      ${p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;border-radius:var(--r-sm);margin:8px 0"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`}
-      <div class="dbl-heart">${HEART_SVG_FILLED}</div>
-    </div>` : ''}
-    <div class="row" style="gap:18px;margin-top:8px">
-      <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
-      <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
-      <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
+  return `<div class="tweet-row">
+    ${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
+    <div style="flex:1;min-width:0">
+      <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
+      ${p.body ? `<p style="margin:2px 0 6px;cursor:pointer;line-height:1.4" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
+      ${p.media_url ? `<div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
+        ${p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;display:block;max-height:420px"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
+        <div class="dbl-heart">${HEART_SVG_FILLED}</div>
+      </div>` : ''}
+      <div class="row" style="gap:28px;margin-top:8px">
+        <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
+        <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
+        <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
+      </div>
     </div>
   </div>`;
 }
@@ -363,6 +402,18 @@ async function dblTapLike(postId, wrapEl) {
     cnt.textContent = parseInt(cnt.textContent) + 1;
   }
 }
+RENDERERS.join = async (el, code) => {
+  if (!requireAuth()) { showAuthGate(); return; }
+  el.innerHTML = `<div class="empty"><div class="spinner"></div><p>Joining group...</p></div>`;
+  try {
+    const { data: groupId, error } = await sb.rpc('redeem_group_invite', { p_code: code });
+    if (error) throw error;
+    toast('Joined!');
+    go('/group/' + groupId);
+  } catch (e) {
+    el.innerHTML = emptyHtml('Could not join', e.message || 'This invite link may be invalid or expired.');
+  }
+};
 RENDERERS.post = async (el, postId) => {
   const { data: post } = await sb.from('social_posts').select('*').eq('id', postId).maybeSingle();
   if (!post) { el.innerHTML = emptyHtml('Post not found', ''); return; }
@@ -675,7 +726,7 @@ RENDERERS.group = async (el, id) => {
   if (!group) { el.innerHTML = emptyHtml('Group not found', ''); return; }
   let myMembership = null;
   if (CURRENT_USER) { const { data } = await sb.from('group_members').select('*').eq('group_id', id).eq('user_id', CURRENT_USER.id).maybeSingle(); myMembership = data; }
-  const { data: messages } = await sb.from('group_messages').select('*').eq('group_id', id).is('deleted_at', null).order('created_at', { ascending: false }).limit(40);
+  const { data: messages } = await sb.from('group_messages').select('*').eq('group_id', id).is('deleted_at', null).order('created_at', { ascending: false }).limit(60);
   const { data: pins } = await sb.from('group_pins').select('message_id').eq('group_id', id);
   const pinnedIds = new Set((pins || []).map((p) => p.message_id).filter(Boolean));
   const msgIds = (messages || []).map((m) => m.id);
@@ -684,9 +735,16 @@ RENDERERS.group = async (el, id) => {
   (reactions || []).forEach((r) => { (reactionsByMsg[r.message_id] = reactionsByMsg[r.message_id] || []).push(r); });
   const profiles = await fetchProfilesMap((messages || []).map((m) => m.sender_id));
   const canAdmin = myMembership && ['owner', 'host', 'moderator'].includes(myMembership.role);
-  const ordered = (messages || []).slice().sort((a, b) => (pinnedIds.has(b.id) - pinnedIds.has(a.id)) || new Date(b.created_at) - new Date(a.created_at)).reverse();
+  const canInvite = myMembership && (canAdmin || group.allow_member_invites);
+  const render = (list) => list.slice().sort((a, b) => (pinnedIds.has(b.id) - pinnedIds.has(a.id)) || new Date(b.created_at) - new Date(a.created_at)).reverse()
+    .map((m) => groupPostHtml(m, profiles[m.sender_id] || { display_name: m.sender_name }, reactionsByMsg[m.id] || [], pinnedIds.has(m.id))).join('') || emptyHtml('No posts yet', '');
+  const generalMsgs = (messages || []).filter((m) => m.channel !== 'host');
+  const adminMsgs = (messages || []).filter((m) => m.channel === 'host');
   el.innerHTML = `<div class="group-header-banner">
-      <div class="group-avatar">${group.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}">` : initials(group.name)}</div>
+      <div class="row between">
+        <div class="group-avatar">${group.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}">` : initials(group.name)}</div>
+        ${canInvite ? `<button class="btn-sm secondary" onclick="generateInvite('${id}')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M16 3.5a4 4 0 0 1 0 8M8 12.5a4 4 0 0 1 0-8m0 8l8-8"/></svg>Invite</button>` : ''}
+      </div>
       <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? ' ✓' : ''}${group.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${group.privacy}</span>` : ''}</div>
       <p class="muted">${escapeHtml(group.description || '')}</p>
       <div class="stat-strip"><div class="stat"><b>${group.host_count}</b><span>hosts</span></div><div class="stat"><b>${group.member_count}</b><span>members</span></div><div class="stat"><b>${group.message_count}</b><span>posts</span></div></div>
@@ -695,9 +753,37 @@ RENDERERS.group = async (el, id) => {
         ${canAdmin ? `<button class="btn-sm secondary" onclick="go('/group-admin/${id}')">Manage</button>` : ''}
       </div>
     </div>
-    ${myMembership ? `<div class="card"><textarea id="gm-input" placeholder="Post to the group..." rows="2"></textarea><button class="btn btn-sm" onclick="sendGroupMessage('${id}')">Post</button></div>` : ''}
-    <div style="margin-top:14px">${ordered.map((m) => groupPostHtml(m, profiles[m.sender_id] || { display_name: m.sender_name }, reactionsByMsg[m.id] || [], pinnedIds.has(m.id))).join('') || emptyHtml('No posts yet', 'Be the first to post!')}</div>`;
+    ${myMembership ? `<div class="tabs" id="group-channel-tabs">
+        <div class="tab active" onclick="switchGroupChannel(this, 0)">General</div>
+        <div class="tab" onclick="switchGroupChannel(this, 1)">Admin chat${!canAdmin ? ' (view only)' : ''}</div>
+      </div>
+      <div class="group-channel-scroll" id="group-channel-scroll">
+        <div class="group-channel-panel">
+          <div class="card"><textarea id="gm-input-member" placeholder="Post to the group..." rows="2"></textarea><button class="btn btn-sm" onclick="sendGroupMessage('${id}', 'member')">Post</button></div>
+          <div>${render(generalMsgs)}</div>
+        </div>
+        <div class="group-channel-panel">
+          ${canAdmin ? `<div class="card"><textarea id="gm-input-host" placeholder="Post to admins/moderators..." rows="2"></textarea><button class="btn btn-sm" onclick="sendGroupMessage('${id}', 'host')">Post</button></div>` : `<p class="muted" style="margin-bottom:10px">Only admins and moderators can post here — everyone in the group can read it.</p>`}
+          <div>${render(adminMsgs)}</div>
+        </div>
+      </div>` : emptyHtml('Join to see posts', '')}`;
 };
+function switchGroupChannel(tabEl, index) {
+  document.querySelectorAll('#group-channel-tabs .tab').forEach((t) => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  const scroll = document.getElementById('group-channel-scroll');
+  scroll.scrollTo({ left: scroll.clientWidth * index, behavior: 'smooth' });
+}
+async function generateInvite(groupId) {
+  if (!requireAuth()) return;
+  try {
+    const { data: code, error } = await sb.rpc('create_group_invite', { p_group_id: groupId });
+    if (error) throw error;
+    const link = `${location.origin}${location.pathname}#/join/${code}`;
+    if (navigator.clipboard) { await navigator.clipboard.writeText(link); toast('Invite link copied: ' + code); }
+    else toast('Invite code: ' + code);
+  } catch (e) { toast(e.message || 'Could not create invite'); }
+}
 function groupPostHtml(m, profile, msgReactions, isPinned) {
   const counts = {};
   msgReactions.forEach((r) => { counts[r.emoji] = counts[r.emoji] || { n: 0, mine: false }; counts[r.emoji].n++; if (r.user_id === CURRENT_USER?.id) counts[r.emoji].mine = true; });
@@ -740,10 +826,10 @@ async function joinGroup(groupId, needsApproval) {
   }
   router();
 }
-async function sendGroupMessage(groupId) {
-  const content = document.getElementById('gm-input').value.trim();
+async function sendGroupMessage(groupId, channel) {
+  const content = document.getElementById('gm-input-' + channel).value.trim();
   if (!content) return;
-  const { error } = await sb.from('group_messages').insert({ group_id: groupId, sender_id: CURRENT_USER.id, sender_name: CURRENT_PROFILE?.display_name || 'Member', content });
+  const { error } = await sb.from('group_messages').insert({ group_id: groupId, sender_id: CURRENT_USER.id, sender_name: CURRENT_PROFILE?.display_name || 'Member', content, channel });
   if (error) return toast(error.message);
   router();
 }
@@ -1028,15 +1114,34 @@ async function messageUser(userId) {
 RENDERERS['edit-profile'] = async (el) => {
   const p = CURRENT_PROFILE || {};
   el.innerHTML = `<h2 style="margin-bottom:14px">Edit Profile</h2>
+    <div style="text-align:center;margin-bottom:16px">
+      <label for="ep-avatar-file" style="cursor:pointer;display:inline-block;position:relative">
+        <div id="ep-avatar-preview">${avatarHtml(p.avatar_url, p.display_name, 'lg')}</div>
+        <div style="position:absolute;bottom:0;right:0;background:var(--green);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid var(--black)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--black)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg></div>
+      </label>
+      <input type="file" id="ep-avatar-file" accept="image/*" style="display:none" onchange="uploadAvatarNow()">
+      <p class="muted" style="margin-top:6px">Tap to change photo</p>
+    </div>
     <label>Display name</label><input id="ep-name" value="${escapeHtml(p.display_name || '')}">
     <label>Username</label><input id="ep-username" value="${escapeHtml(p.username || '')}">
     <label>Bio</label><textarea id="ep-bio" rows="3">${escapeHtml(p.bio || '')}</textarea>
-    <label>Avatar URL</label><input id="ep-avatar" value="${escapeHtml(p.avatar_url || '')}">
+    <input type="hidden" id="ep-avatar" value="${escapeHtml(p.avatar_url || '')}">
     <label>Website</label><input id="ep-website" value="${escapeHtml(p.website || '')}">
     <label>Instagram</label><input id="ep-instagram" value="${escapeHtml(p.instagram || '')}">
     <label>Who can message you</label><select id="ep-msgreq"><option value="everyone" ${p.message_requests === 'everyone' ? 'selected' : ''}>Everyone</option><option value="followers" ${p.message_requests === 'followers' ? 'selected' : ''}>Followers</option><option value="nobody" ${p.message_requests === 'nobody' ? 'selected' : ''}>Nobody</option></select>
     <button class="btn" onclick="saveProfile()">Save</button>`;
 };
+async function uploadAvatarNow() {
+  if (!requireAuth()) return;
+  const file = document.getElementById('ep-avatar-file').files[0];
+  if (!file) return;
+  document.getElementById('ep-avatar-preview').innerHTML = `<div class="avatar lg"><div class="spinner" style="margin:22px auto"></div></div>`;
+  try {
+    const url = await uploadToStorage('avatars', file);
+    document.getElementById('ep-avatar').value = url;
+    document.getElementById('ep-avatar-preview').innerHTML = `<div class="avatar lg"><img src="${url}"></div>`;
+  } catch (e) { toast(e.message || 'Upload failed'); }
+}
 async function saveProfile() {
   const payload = {
     display_name: document.getElementById('ep-name').value.trim(),
