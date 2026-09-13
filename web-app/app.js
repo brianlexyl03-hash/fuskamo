@@ -699,26 +699,49 @@ function groupCard(g, hostIds, profiles) {
 RENDERERS['create-group'] = async (el) => {
   if (!requireAuth()) return;
   el.innerHTML = `<h2 style="margin-bottom:14px">Create a Group</h2>
+    <div style="text-align:center;margin-bottom:16px">
+      <label for="cg-avatar-file" style="cursor:pointer;display:inline-block">
+        <div id="cg-avatar-preview" class="group-avatar" style="width:72px;height:72px;font-size:26px;margin:0 auto">+</div>
+      </label>
+      <input type="file" id="cg-avatar-file" accept="image/*" style="display:none" onchange="previewGroupAvatar()">
+      <input type="hidden" id="cg-avatar-url" value="">
+      <p class="muted" style="margin-top:6px">Add a group photo</p>
+    </div>
     <label>Name</label><input id="cg-name">
     <label>Category</label><input id="cg-category" value="General Football">
     <label>Description</label><textarea id="cg-desc" rows="3"></textarea>
     <label>Privacy</label><select id="cg-privacy"><option value="public">Public</option><option value="private">Private</option></select>
-    <button class="btn" onclick="createGroup()">Create group</button>`;
+    <button class="btn" id="cg-submit-btn" onclick="createGroup()">Create group</button>`;
 };
+let groupAvatarFile = null;
+function previewGroupAvatar() {
+  groupAvatarFile = document.getElementById('cg-avatar-file').files[0] || null;
+  if (!groupAvatarFile) return;
+  const url = URL.createObjectURL(groupAvatarFile);
+  document.getElementById('cg-avatar-preview').innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover">`;
+}
 async function createGroup() {
   const name = document.getElementById('cg-name').value.trim();
   if (!name || name.length < 2) return toast('Name must be at least 2 characters.');
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 39) + '-' + Math.random().toString(36).slice(2, 6);
-  const { data, error } = await sb.rpc('create_group', {
-    p_name: name, p_slug: slug,
-    p_description: document.getElementById('cg-desc').value.trim(),
-    p_category: document.getElementById('cg-category').value.trim() || 'General Football',
-    p_privacy: document.getElementById('cg-privacy').value,
-    p_display_name: CURRENT_PROFILE?.display_name || 'Host',
-  });
-  if (error) return toast(error.message);
-  toast('Group created');
-  go('/group/' + data.id);
+  const btn = document.getElementById('cg-submit-btn');
+  btn.disabled = true; btn.textContent = 'Creating...';
+  try {
+    let avatarUrl = null;
+    if (groupAvatarFile) avatarUrl = await uploadToStorage('avatars', groupAvatarFile);
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 39) + '-' + Math.random().toString(36).slice(2, 6);
+    const { data, error } = await sb.rpc('create_group', {
+      p_name: name, p_slug: slug,
+      p_description: document.getElementById('cg-desc').value.trim(),
+      p_category: document.getElementById('cg-category').value.trim() || 'General Football',
+      p_privacy: document.getElementById('cg-privacy').value,
+      p_avatar_url: avatarUrl,
+      p_display_name: CURRENT_PROFILE?.display_name || 'Host',
+    });
+    if (error) throw error;
+    groupAvatarFile = null;
+    toast('Group created');
+    go('/group/' + data.id);
+  } catch (e) { toast(e.message || 'Could not create group'); btn.disabled = false; btn.textContent = 'Create group'; }
 }
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '⚽'];
 RENDERERS.group = async (el, id) => {
@@ -834,10 +857,20 @@ async function sendGroupMessage(groupId, channel) {
   router();
 }
 RENDERERS['group-admin'] = async (el, id) => {
+  const { data: group } = await sb.from('groups').select('*').eq('id', id).single();
+  const { data: myRow } = await sb.from('group_members').select('role').eq('group_id', id).eq('user_id', CURRENT_USER.id).maybeSingle();
+  const isOwner = myRow?.role === 'owner';
   const { data: requests } = await sb.from('group_join_requests').select('*').eq('group_id', id).eq('status', 'pending');
   const { data: members } = await sb.from('group_members').select('*').eq('group_id', id).order('joined_at');
   const profiles = await fetchProfilesMap([...(requests || []).map((r) => r.user_id), ...(members || []).map((m) => m.user_id)]);
   el.innerHTML = `<h2 style="margin-bottom:14px">Manage Group</h2>
+    ${isOwner ? `<div style="text-align:center;margin-bottom:16px">
+      <label for="ga-avatar-file" style="cursor:pointer;display:inline-block">
+        <div id="ga-avatar-preview" class="group-avatar" style="width:72px;height:72px;font-size:26px;margin:0 auto">${group?.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}" style="width:100%;height:100%;object-fit:cover">` : initials(group?.name || '')}</div>
+      </label>
+      <input type="file" id="ga-avatar-file" accept="image/*" style="display:none" onchange="changeGroupAvatar('${id}')">
+      <p class="muted" style="margin-top:6px">Tap to change group photo</p>
+    </div>` : ''}
     <h3 style="margin-bottom:8px">Join requests (${(requests || []).length})</h3>
     ${(requests || []).map((r) => `<div class="card row between"><span>${escapeHtml(profiles[r.user_id]?.display_name || 'Member')}</span>
       <div class="row"><button class="btn-sm" onclick="reviewJoinRequest('${r.id}','approved','${id}','${r.user_id}')">Approve</button><button class="btn-sm secondary" onclick="reviewJoinRequest('${r.id}','rejected','${id}','${r.user_id}')">Reject</button></div>
@@ -845,6 +878,18 @@ RENDERERS['group-admin'] = async (el, id) => {
     <h3 style="margin:14px 0 8px">Members (${(members || []).length})</h3>
     ${(members || []).map((m) => `<div class="card row between"><span>${escapeHtml(profiles[m.user_id]?.display_name || m.display_name)}</span><span class="pill">${m.role}</span></div>`).join('')}`;
 };
+async function changeGroupAvatar(groupId) {
+  const file = document.getElementById('ga-avatar-file').files[0];
+  if (!file) return;
+  document.getElementById('ga-avatar-preview').innerHTML = `<div class="spinner" style="margin:22px auto"></div>`;
+  try {
+    const url = await uploadToStorage('avatars', file);
+    const { error } = await sb.from('groups').update({ avatar_url: url }).eq('id', groupId);
+    if (error) throw error;
+    toast('Group photo updated');
+    router();
+  } catch (e) { toast(e.message || 'Upload failed'); }
+}
 async function reviewJoinRequest(reqId, status, groupId, userId) {
   await sb.from('group_join_requests').update({ status, reviewed_at: new Date().toISOString() }).eq('id', reqId);
   if (status === 'approved') await sb.from('group_members').insert({ group_id: groupId, user_id: userId, role: 'member', display_name: 'Member' });
@@ -1123,7 +1168,8 @@ RENDERERS['edit-profile'] = async (el) => {
       <p class="muted" style="margin-top:6px">Tap to change photo</p>
     </div>
     <label>Display name</label><input id="ep-name" value="${escapeHtml(p.display_name || '')}">
-    <label>Username</label><input id="ep-username" value="${escapeHtml(p.username || '')}">
+    <label>Username</label><input id="ep-username" value="${escapeHtml(p.username || '')}" oninput="checkUsernameAvailable()" placeholder="lowercase, starts with a letter">
+    <p class="muted" id="ep-username-status" style="margin:-6px 0 10px"></p>
     <label>Bio</label><textarea id="ep-bio" rows="3">${escapeHtml(p.bio || '')}</textarea>
     <input type="hidden" id="ep-avatar" value="${escapeHtml(p.avatar_url || '')}">
     <label>Website</label><input id="ep-website" value="${escapeHtml(p.website || '')}">
@@ -1142,10 +1188,29 @@ async function uploadAvatarNow() {
     document.getElementById('ep-avatar-preview').innerHTML = `<div class="avatar lg"><img src="${url}"></div>`;
   } catch (e) { toast(e.message || 'Upload failed'); }
 }
+let usernameCheckTimer;
+function checkUsernameAvailable() {
+  clearTimeout(usernameCheckTimer);
+  const raw = document.getElementById('ep-username').value.trim().toLowerCase();
+  const status = document.getElementById('ep-username-status');
+  if (!raw) { status.textContent = ''; return; }
+  if (!/^[a-z][a-z0-9_]{2,19}$/.test(raw)) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Lowercase letters/numbers/underscore, must start with a letter, 3-20 characters.';
+    return;
+  }
+  status.style.color = 'var(--sub)';
+  status.textContent = 'Checking availability...';
+  usernameCheckTimer = setTimeout(async () => {
+    const { data } = await sb.from('profiles').select('user_id').ilike('username', raw).maybeSingle();
+    if (data && data.user_id !== CURRENT_USER.id) { status.style.color = 'var(--red)'; status.textContent = 'That username is taken.'; }
+    else { status.style.color = 'var(--green)'; status.textContent = 'Available.'; }
+  }, 400);
+}
 async function saveProfile() {
   const payload = {
     display_name: document.getElementById('ep-name').value.trim(),
-    username: document.getElementById('ep-username').value.trim() || null,
+    username: document.getElementById('ep-username').value.trim().toLowerCase() || null,
     bio: document.getElementById('ep-bio').value.trim(),
     avatar_url: document.getElementById('ep-avatar').value.trim() || null,
     website: document.getElementById('ep-website').value.trim() || null,
@@ -1154,7 +1219,11 @@ async function saveProfile() {
     updated_at: new Date().toISOString(),
   };
   const { error } = await sb.from('profiles').update(payload).eq('user_id', CURRENT_USER.id);
-  if (error) return toast(error.message);
+  if (error) {
+    if (error.code === '23505') return toast('That username is already taken.');
+    if (error.code === '23514') return toast('Username must be lowercase, start with a letter, 3-20 characters.');
+    return toast(error.message);
+  }
   await ensureProfile();
   toast('Profile updated');
   go('/profile');
