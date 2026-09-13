@@ -206,6 +206,36 @@ function badgeHtml(badgeType, verified) {
 }
 
 // ---------- Boot ----------
+// ---------- Theme ----------
+(function initTheme() {
+  const saved = localStorage.getItem('fuskamo_theme');
+  if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+})();
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  if (isLight) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('fuskamo_theme', 'dark'); }
+  else { document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('fuskamo_theme', 'light'); }
+}
+
+// ---------- Auth scene parallax ----------
+function initAuthParallax() {
+  const scene = document.getElementById('auth-scene');
+  if (!scene || scene._bound) return;
+  scene._bound = true;
+  const blobs = scene.querySelectorAll('.auth-blob');
+  const juggler = document.querySelector('.juggler');
+  function move(x, y) {
+    const dx = (x / window.innerWidth - 0.5) * 2;
+    const dy = (y / window.innerHeight - 0.5) * 2;
+    blobs.forEach((b, i) => { const f = (i + 1) * 10; b.style.transform = `translate(${dx * f}px, ${dy * f}px)`; });
+    if (juggler) juggler.style.transform = `translate(${dx * -14}px, ${dy * -14}px)`;
+  }
+  window.addEventListener('pointermove', (e) => move(e.clientX, e.clientY));
+  window.addEventListener('touchmove', (e) => { if (e.touches[0]) move(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+  window.addEventListener('deviceorientation', (e) => { if (e.gamma != null) move(window.innerWidth / 2 + e.gamma * 8, window.innerHeight / 2 + (e.beta - 45) * 4); });
+}
+
+// ---------- Boot ----------
 (async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
@@ -213,6 +243,8 @@ function badgeHtml(badgeType, verified) {
     await ensureProfile();
   }
   router();
+  initAuthParallax();
+  document.getElementById('splash').classList.add('hide');
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') { CURRENT_USER = null; CURRENT_PROFILE = null; showAuthGate(); }
   });
@@ -920,22 +952,40 @@ RENDERERS.profile = async (el) => {
   const p = CURRENT_PROFILE || {};
   const { count: followers } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('followed_id', CURRENT_USER.id);
   const { count: following } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('follower_id', CURRENT_USER.id);
-  el.innerHTML = `<div class="row" style="margin-bottom:14px">${avatarHtml(p.avatar_url, p.display_name, 'lg')}
-      <div><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><span class="muted">@${escapeHtml(p.username || 'unset')} · ${p.role}</span></div></div>
+  el.innerHTML = `<div class="row between" style="margin-bottom:14px">
+      <div class="row">${avatarHtml(p.avatar_url, p.display_name, 'lg')}
+        <div><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><span class="muted">@${escapeHtml(p.username || 'unset')} · ${p.role}</span></div></div>
+      <button class="icon-btn" onclick="openProfileMenu()" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></button>
+    </div>
     <p style="margin-bottom:10px">${escapeHtml(p.bio || '')}</p>
     <div class="row" style="gap:20px;margin-bottom:14px"><span><b>${followers || 0}</b> <span class="muted">followers</span></span><span><b>${following || 0}</b> <span class="muted">following</span></span></div>
     <div class="grid-2" style="margin-bottom:14px">
       <button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button>
       <button class="btn secondary" onclick="go('/analytics')">Analytics</button>
     </div>
-    <div class="settings-link" onclick="go('/account-settings')"><span>Account settings</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
-    <div class="settings-link" onclick="go('/security-settings')"><span>Security</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
-    <div class="settings-link" onclick="go('/story-settings')"><span>New story</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
-    <div class="settings-link" onclick="go('/verification')"><span>Get verified</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
-    <div class="settings-link" onclick="go('/moderation')"><span>My reports</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
-    <div class="settings-link" onclick="go('/mfa-setup')"><span>Two-factor authentication</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
-    <button class="btn danger" style="margin-top:16px" onclick="signOut()">Sign out</button>`;
+    <div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div>
+    <div id="profile-menu-sheet" class="menu-sheet">
+      <div class="menu-sheet-handle"></div>
+      ${chev('Account settings', "go('/account-settings');closeProfileMenu()")}
+      ${chev('Security', "go('/security-settings');closeProfileMenu()")}
+      ${chev('New story', "go('/story-settings');closeProfileMenu()")}
+      ${chev('Get verified', "go('/verification');closeProfileMenu()")}
+      ${chev('My reports', "go('/moderation');closeProfileMenu()")}
+      ${chev('Two-factor authentication', "go('/mfa-setup');closeProfileMenu()")}
+      <button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button>
+    </div>`;
 };
+function chev(label, onclick) {
+  return `<div class="settings-link" onclick="${onclick}"><span>${label}</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>`;
+}
+function openProfileMenu() {
+  document.getElementById('profile-menu-backdrop').classList.add('show');
+  document.getElementById('profile-menu-sheet').classList.add('show');
+}
+function closeProfileMenu() {
+  document.getElementById('profile-menu-backdrop').classList.remove('show');
+  document.getElementById('profile-menu-sheet').classList.remove('show');
+}
 
 // ---------- PUBLIC PROFILE ----------
 RENDERERS['public-profile'] = async (el, userId) => {
