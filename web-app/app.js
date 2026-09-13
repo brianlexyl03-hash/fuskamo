@@ -64,7 +64,7 @@ const ROUTES = [
   'groups', 'group', 'create-group', 'group-admin', 'messages', 'conversation', 'message-requests',
   'reels', 'scoreboard', 'achievements', 'notifications', 'notification-preferences',
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
-  'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup',
+  'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post',
 ];
 const NAV_TABS = { feed: 'feed', discover: 'discover', groups: 'groups', scouts: 'scouts', profile: 'profile' };
 
@@ -302,14 +302,86 @@ async function uploadToStorage(bucket, file) {
 function feedPostHtml(p, profile, isLiked) {
   return `<div class="card">
     <div class="row between">${authorLine(profile, p.created_at)}</div>
-    ${p.body ? `<p style="margin:8px 0">${escapeHtml(p.body)}</p>` : ''}
-    ${p.media_url ? (p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;border-radius:var(--r-sm);margin:8px 0"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`) : ''}
+    ${p.body ? `<p style="margin:8px 0;cursor:pointer" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
+    ${p.media_url ? `<div style="position:relative" ondblclick="dblTapLike('${p.id}', this)">
+      ${p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;border-radius:var(--r-sm);margin:8px 0"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`}
+      <div class="dbl-heart">${HEART_SVG_FILLED}</div>
+    </div>` : ''}
     <div class="row" style="gap:18px;margin-top:8px">
-      <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}"><svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg><span class="cnt">${p.like_count}</span></span>
-      <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
+      <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
+      <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
       <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
     </div>
   </div>`;
+}
+function HEART_SVG(filled) { return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`; }
+const HEART_SVG_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`;
+async function dblTapLike(postId, wrapEl) {
+  if (!requireAuth()) return;
+  const { data: existing } = await sb.from('social_post_likes').select('*').eq('post_id', postId).eq('user_id', CURRENT_USER.id).maybeSingle();
+  if (!existing) await sb.from('social_post_likes').insert({ post_id: postId, user_id: CURRENT_USER.id });
+  const heart = wrapEl.querySelector('.dbl-heart');
+  heart.classList.add('pop');
+  setTimeout(() => heart.classList.remove('pop'), 700);
+  const engageBtn = wrapEl.closest('.card').querySelector('.engage-btn');
+  if (engageBtn && engageBtn.dataset.liked !== 'true') {
+    engageBtn.dataset.liked = 'true';
+    engageBtn.classList.add('liked');
+    const cnt = engageBtn.querySelector('.cnt');
+    cnt.textContent = parseInt(cnt.textContent) + 1;
+  }
+}
+RENDERERS.post = async (el, postId) => {
+  const { data: post } = await sb.from('social_posts').select('*').eq('id', postId).maybeSingle();
+  if (!post) { el.innerHTML = emptyHtml('Post not found', ''); return; }
+  const { data: comments } = await sb.from('social_comments').select('*').eq('post_id', postId).eq('status', 'published').order('created_at', { ascending: true });
+  const postAuthor = (await fetchProfilesMap([post.author_id]))[post.author_id];
+  const commentProfiles = await fetchProfilesMap((comments || []).map((c) => c.author_id));
+  const myLikes = await myLikedSet('social_comment_likes', 'comment_id', (comments || []).map((c) => c.id));
+  const liked = (await myLikedSet('social_post_likes', 'post_id', [postId])).has(postId);
+  const top = (comments || []).filter((c) => !c.parent_id);
+  const repliesOf = (id) => (comments || []).filter((c) => c.parent_id === id);
+  const commentHtml = (c) => `<div class="card" style="margin-bottom:8px">
+      ${authorLine(commentProfiles[c.author_id], c.created_at)}
+      <p style="margin:4px 0">${escapeHtml(c.body)}</p>
+      <div class="row" style="gap:14px">
+        <span class="engage-btn ${myLikes.has(c.id) ? 'liked' : ''}" style="font-size:12px" onclick="toggleCommentLike('${c.id}', this)" data-liked="${myLikes.has(c.id)}">${HEART_SVG(myLikes.has(c.id))}<span class="cnt">${c.like_count}</span></span>
+        <span class="muted" style="cursor:pointer" onclick="showReplyBox('${c.id}')">Reply</span>
+      </div>
+      <div id="reply-box-${c.id}" style="display:none;margin-top:8px"><textarea id="reply-input-${c.id}" rows="1" placeholder="Write a reply..."></textarea><button class="btn-sm" onclick="submitComment('${postId}', '${c.id}')">Reply</button></div>
+      <div style="margin-left:16px;margin-top:6px">${repliesOf(c.id).map(commentHtml).join('')}</div>
+    </div>`;
+  el.innerHTML = `<div class="card">
+      ${authorLine(postAuthor, post.created_at)}
+      ${post.body ? `<p style="margin:8px 0">${escapeHtml(post.body)}</p>` : ''}
+      ${post.media_url ? (post.media_type === 'external_video' ? `<video src="${escapeHtml(post.media_url)}" controls style="width:100%;border-radius:var(--r-sm);margin:8px 0"></video>` : `<img src="${escapeHtml(post.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`) : ''}
+      <div class="row" style="gap:18px;margin-top:8px">
+        <span class="engage-btn ${liked ? 'liked' : ''}" onclick="togglePostLike('${post.id}', this)" data-liked="${liked}">${HEART_SVG(liked)}<span class="cnt">${post.like_count}</span></span>
+        <span class="muted">${comments.length} comment${comments.length === 1 ? '' : 's'}</span>
+      </div>
+    </div>
+    <div class="card"><textarea id="new-comment-input" rows="2" placeholder="Add a comment..."></textarea><button class="btn btn-sm" onclick="submitComment('${postId}', null)">Comment</button></div>
+    <div id="comments-list">${top.map(commentHtml).join('') || emptyHtml('No comments yet', 'Start the conversation.')}</div>`;
+};
+function showReplyBox(commentId) {
+  const box = document.getElementById('reply-box-' + commentId);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+async function submitComment(postId, parentId) {
+  if (!requireAuth()) return;
+  const inputId = parentId ? `reply-input-${parentId}` : 'new-comment-input';
+  const body = document.getElementById(inputId).value.trim();
+  if (!body) return toast('Write something first.');
+  const { error } = await sb.from('social_comments').insert({ post_id: postId, author_id: CURRENT_USER.id, parent_id: parentId, body });
+  if (error) return toast(error.message);
+  router();
+}
+async function toggleCommentLike(commentId, span) {
+  if (!requireAuth()) return;
+  const liked = span.dataset.liked === 'true';
+  if (liked) await sb.from('social_comment_likes').delete().eq('comment_id', commentId).eq('user_id', CURRENT_USER.id);
+  else await sb.from('social_comment_likes').insert({ comment_id: commentId, user_id: CURRENT_USER.id });
+  router();
 }
 async function submitPost() {
   if (!requireAuth()) return;
@@ -721,21 +793,49 @@ RENDERERS.reels = async (el) => {
   const { data: reels } = await sb.from('social_reels').select('*').eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(20);
   const profiles = await fetchProfilesMap((reels || []).map((r) => r.author_id));
   const liked = await myLikedSet('social_reel_likes', 'reel_id', (reels || []).map((r) => r.id));
-  el.innerHTML = `
-    <div class="row between" style="margin-bottom:14px">
-      <h2>Reels</h2>
-      <label for="reel-file" class="btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Upload reel
-      </label>
-      <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">
-    </div>
-    ${(reels || []).map((r) => `<div class="reel-card">
-      <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} controls></video>
-      <div class="reel-overlay">${authorLine(profiles[r.author_id], r.created_at)}<p style="margin:4px 0">${escapeHtml(r.caption)}</p>
-        <span class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}" style="color:${liked.has(r.id) ? 'var(--green)' : '#fff'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg><span class="cnt">${r.like_count}</span></span>
+  if (!(reels || []).length) {
+    el.innerHTML = `<div class="reels-empty-upload">${emptyHtml('No reels yet', 'Be the first to upload one.')}
+      <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()"></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="reels-scroll" id="reels-scroll">
+    ${(reels || []).map((r, i) => `<div class="reel-slide" data-index="${i}">
+      <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} loop muted playsinline onclick="toggleReelMute(this)"></video>
+      <div class="mute-hint" id="mute-hint-${i}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg></div>
+      <div class="reel-overlay">
+        <div class="meta">${authorLine(profiles[r.author_id], r.created_at)}<p style="margin:4px 0">${escapeHtml(r.caption)}</p></div>
+        <div class="reel-actions">
+          <span class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}">${HEART_SVG(liked.has(r.id))}<span class="cnt">${r.like_count}</span></span>
+          <label for="reel-file" class="engage-btn" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></label>
+        </div>
       </div>
-    </div>`).join('') || emptyHtml('No reels yet', 'Be the first to upload one.')}`;
+    </div>`).join('')}
+  </div>
+  <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">`;
+  initReelsAutoplay();
 };
+function initReelsAutoplay() {
+  const slides = document.querySelectorAll('.reel-slide video');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const video = entry.target;
+      if (entry.isIntersecting && entry.intersectionRatio > 0.6) video.play().catch(() => {});
+      else video.pause();
+    });
+  }, { threshold: [0, 0.6, 1] });
+  slides.forEach((v) => observer.observe(v));
+  if (slides[0]) slides[0].play().catch(() => {});
+}
+function toggleReelMute(video) {
+  video.muted = !video.muted;
+  const idx = video.closest('.reel-slide').dataset.index;
+  const hint = document.getElementById('mute-hint-' + idx);
+  hint.innerHTML = video.muted
+    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 9l4 6m0-6l-4 6" stroke="#fff" stroke-width="2"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg>`;
+  hint.classList.add('show');
+  setTimeout(() => hint.classList.remove('show'), 900);
+}
 async function uploadNewReel() {
   if (!requireAuth()) { document.getElementById('reel-file').value = ''; return; }
   const file = document.getElementById('reel-file').files[0];
@@ -759,7 +859,6 @@ async function toggleReelLike(reelId, span) {
   cnt.textContent = parseInt(cnt.textContent) + (liked ? -1 : 1);
   span.dataset.liked = (!liked).toString();
   span.classList.toggle('liked', !liked);
-  span.style.color = liked ? '#fff' : 'var(--green)';
 }
 
 // ---------- SCOREBOARD ----------
