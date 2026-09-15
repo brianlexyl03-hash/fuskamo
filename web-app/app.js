@@ -340,6 +340,7 @@ RENDERERS.feed = async (el) => {
     </div>
     ${mediaStrip}
     <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml('No posts yet', 'Be the first to share something.')}</div>`;
+  initFeedVideoAutoplay();
 };
 let composerFile = null;
 function previewComposerFile() {
@@ -367,6 +368,39 @@ async function uploadToStorage(bucket, file) {
   const { data } = sb.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
 }
+function feedVideoHtml(url) {
+  const vid = 'fv' + Math.random().toString(36).slice(2, 9);
+  return `<div class="feed-video-wrap" id="wrap-${vid}">
+    <video id="${vid}" src="${escapeHtml(url)}" muted playsinline loop class="feed-video" onclick="toggleFeedPlay('${vid}')"></video>
+    <div class="feed-play-overlay" id="play-${vid}" onclick="toggleFeedPlay('${vid}')"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+    <button class="feed-mute-btn" onclick="event.stopPropagation();toggleFeedMute('${vid}')" id="mute-${vid}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 9l4 6m0-6l-4 6" stroke="#fff" stroke-width="2"/></svg></button>
+  </div>`;
+}
+function toggleFeedPlay(id) {
+  const v = document.getElementById(id), overlay = document.getElementById('play-' + id);
+  if (v.paused) { v.play().catch(() => {}); overlay.style.display = 'none'; }
+  else { v.pause(); overlay.style.display = 'flex'; }
+}
+function toggleFeedMute(id) {
+  const v = document.getElementById(id), btn = document.getElementById('mute-' + id);
+  v.muted = !v.muted;
+  btn.innerHTML = v.muted
+    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 9l4 6m0-6l-4 6" stroke="#fff" stroke-width="2"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg>`;
+}
+function initFeedVideoAutoplay() {
+  const videos = document.querySelectorAll('.feed-video');
+  if (!videos.length) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const v = entry.target;
+      const overlay = document.getElementById('play-' + v.id);
+      if (entry.isIntersecting && entry.intersectionRatio > 0.6) { v.play().catch(() => {}); if (overlay) overlay.style.display = 'none'; }
+      else { v.pause(); if (overlay) overlay.style.display = 'flex'; }
+    });
+  }, { threshold: [0, 0.6, 1] });
+  videos.forEach((v) => observer.observe(v));
+}
 function feedPostHtml(p, profile, isLiked) {
   return `<div class="tweet-row">
     ${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
@@ -374,7 +408,7 @@ function feedPostHtml(p, profile, isLiked) {
       <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
       ${p.body ? `<p style="margin:2px 0 6px;cursor:pointer;line-height:1.4" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
       ${p.media_url ? `<div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
-        ${p.media_type === 'external_video' ? `<video src="${escapeHtml(p.media_url)}" controls style="width:100%;display:block;max-height:420px"></video>` : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
+        ${p.media_type === 'external_video' ? feedVideoHtml(p.media_url) : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
         <div class="dbl-heart">${HEART_SVG_FILLED}</div>
       </div>` : ''}
       <div class="row" style="gap:28px;margin-top:8px">
@@ -437,7 +471,7 @@ RENDERERS.post = async (el, postId) => {
   el.innerHTML = `<div class="card">
       ${authorLine(postAuthor, post.created_at)}
       ${post.body ? `<p style="margin:8px 0">${escapeHtml(post.body)}</p>` : ''}
-      ${post.media_url ? (post.media_type === 'external_video' ? `<video src="${escapeHtml(post.media_url)}" controls style="width:100%;border-radius:var(--r-sm);margin:8px 0"></video>` : `<img src="${escapeHtml(post.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`) : ''}
+      ${post.media_url ? (post.media_type === 'external_video' ? `<div style="border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);margin:8px 0">${feedVideoHtml(post.media_url)}</div>` : `<img src="${escapeHtml(post.media_url)}" style="width:100%;border-radius:var(--r-sm);margin:8px 0">`) : ''}
       <div class="row" style="gap:18px;margin-top:8px">
         <span class="engage-btn ${liked ? 'liked' : ''}" onclick="togglePostLike('${post.id}', this)" data-liked="${liked}">${HEART_SVG(liked)}<span class="cnt">${post.like_count}</span></span>
         <span class="muted">${comments.length} comment${comments.length === 1 ? '' : 's'}</span>
@@ -445,6 +479,7 @@ RENDERERS.post = async (el, postId) => {
     </div>
     <div class="card"><textarea id="new-comment-input" rows="2" placeholder="Add a comment..."></textarea><button class="btn btn-sm" onclick="submitComment('${postId}', null)">Comment</button></div>
     <div id="comments-list">${top.map(commentHtml).join('') || emptyHtml('No comments yet', 'Start the conversation.')}</div>`;
+  initFeedVideoAutoplay();
 };
 function showReplyBox(commentId) {
   const box = document.getElementById('reply-box-' + commentId);

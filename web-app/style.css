@@ -286,4 +286,12 @@ label { display: block; font-size: 12px; color: var(--sub); margin-bottom: 6px; 
 .tweet-row { display: flex; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .tweet-row p { font-size: 14.5px; }
 
+/* ---------- Custom feed video player (no native browser controls) ---------- */
+.feed-video-wrap { position: relative; background: #000; cursor: pointer; }
+.feed-video { width: 100%; display: block; max-height: 420px; object-fit: cover; }
+.feed-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); transition: opacity 0.15s; }
+.feed-play-overlay svg { width: 52px; height: 52px; color: #fff; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)); }
+.feed-mute-btn { position: absolute; bottom: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.5); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.feed-mute-btn svg { width: 15px; height: 15px; color: #fff; }
+
 @media (max-width: 380px) { .grid-2 { grid-template-columns: 1fr; } }
