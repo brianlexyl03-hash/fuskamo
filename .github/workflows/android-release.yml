@@ -1,8 +1,9 @@
 name: Build Signed Android Release
 
-# Manually triggered from the Actions tab — builds a signed .aab (Play
-# Store upload format) entirely on GitHub's servers, so no local Flutter
-# SDK or Android toolchain is needed on your phone at all.
+# Manually triggered from the Actions tab — builds both a signed .apk
+# (install directly on your phone) and .aab (Play Store upload format)
+# entirely on GitHub's servers, so no local Flutter SDK or Android
+# toolchain is needed on your phone at all.
 on:
   workflow_dispatch: {}
 
@@ -40,7 +41,17 @@ jobs:
           EOF
 
       - run: flutter pub get
-      - run: flutter build appbundle --release
+
+      - name: Build installable APK (for your phone)
+        run: flutter build apk --release
+
+      - name: Build AAB (for Play Store upload)
+        run: flutter build appbundle --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuskamo-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
 
       - uses: actions/upload-artifact@v4
         with:
