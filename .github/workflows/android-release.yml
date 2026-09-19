@@ -1,11 +1,59 @@
-name: Test Workflow
+name: Build Signed Android Release
 
+# Manually triggered from the Actions tab — builds both a signed .apk
+# (install directly on your phone) and .aab (Play Store upload format)
+# entirely on GitHub's servers, so no local Flutter SDK or Android
+# toolchain is needed on your phone at all.
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Test
-        run: echo "GitHub Actions is working"
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Write .env (bundled as a build asset)
+        run: |
+          cat > .env << EOF
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          BACKEND_BASE_URL=${{ secrets.BACKEND_BASE_URL }}
+          BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}
+          PLAYER_DISCOVERY_V2=true
+          EOF
+
+      - name: Decode release keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties << EOF
+          storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=fuskamo-release.jks
+          EOF
+
+      - run: flutter pub get
+
+      - name: Build installable APK (for your phone)
+        run: flutter build apk --release
+
+      - name: Build AAB (for Play Store upload)
+        run: flutter build appbundle --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuskamo-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuskamo-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
