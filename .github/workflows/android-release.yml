@@ -1,53 +1,11 @@
-name: Build Signed Android Release
+name: Test Workflow
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.0'
-          channel: 'stable'
-
-      - name: Write .env (bundled as a build asset)
-        run: |
-          cat > .env << EOF2
-          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          BACKEND_BASE_URL=${{ secrets.BACKEND_BASE_URL }}
-          BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}
-          PLAYER_DISCOVERY_V2=true
-          EOF2
-
-      - name: Decode release keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
-
-      - name: Write key.properties
-        run: |
-          cat > android/key.properties << EOF2
-          storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=fuskamo-release.jks
-          EOF2
-
-      - run: flutter pub get
-      - name: Build installable APK (for your phone)
-        run: flutter build apk --release
-      - name: Build AAB (for Play Store upload)
-        run: flutter build appbundle --release
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fuskamo-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fuskamo-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
+      - name: Test
+        run: echo "GitHub Actions is working"
