@@ -1,9 +1,5 @@
 name: Build Signed Android Release
 
-# Manually triggered from the Actions tab — builds both a signed .apk
-# (install directly on your phone) and .aab (Play Store upload format)
-# entirely on GitHub's servers, so no local Flutter SDK or Android
-# toolchain is needed on your phone at all.
 on:
   workflow_dispatch: {}
 
@@ -20,31 +16,29 @@ jobs:
 
       - name: Write .env (bundled as a build asset)
         run: |
-          cat > .env << EOF
+          cat > .env << EOF2
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           BACKEND_BASE_URL=${{ secrets.BACKEND_BASE_URL }}
           BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}
           PLAYER_DISCOVERY_V2=true
-          EOF
+          EOF2
 
       - name: Decode release keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
 
       - name: Write key.properties
         run: |
-          cat > android/key.properties << EOF
+          cat > android/key.properties << EOF2
           storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           storeFile=fuskamo-release.jks
-          EOF
+          EOF2
 
       - run: flutter pub get
-
       - name: Build installable APK (for your phone)
         run: flutter build apk --release
-
       - name: Build AAB (for Play Store upload)
         run: flutter build appbundle --release
 
