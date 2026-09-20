@@ -41,7 +41,7 @@ jobs:
           storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=fuskamo-release.jks
+          storeFile=../fuskamo-release.jks
           EOF
 
       - run: flutter pub get
