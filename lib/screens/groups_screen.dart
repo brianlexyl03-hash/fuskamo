@@ -58,7 +58,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   Future<void> _enterInvite() async {
     _inviteController.clear();
-    await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('JOIN BY INVITE'),content:TextField(controller:_inviteController,autocapitalize:TextCapitalization.characters,decoration:const InputDecoration(labelText:'Invite code',hintText:'ABC123DEF456')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('CANCEL')),ElevatedButton(onPressed:() async {final code=_inviteController.text.trim();if(code.isEmpty)return;Navigator.pop(ctx);await _acceptInvite(code);},child:const Text('CONTINUE'))]));
+    await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('JOIN BY INVITE'),content:TextField(controller:_inviteController,textCapitalization:TextCapitalization.characters,decoration:const InputDecoration(labelText:'Invite code',hintText:'ABC123DEF456')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('CANCEL')),ElevatedButton(onPressed:() async {final code=_inviteController.text.trim();if(code.isEmpty)return;Navigator.pop(ctx);await _acceptInvite(code);},child:const Text('CONTINUE'))]));
   }
   Future<void> _acceptInvite(String code) async {
     try {

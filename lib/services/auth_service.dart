@@ -75,7 +75,7 @@ class AuthService {
   }
 
   Future<void> unenrollMfa(String factorId) {
-    return SupabaseService.client.auth.mfa.unenroll(factorId: factorId);
+    return SupabaseService.client.auth.mfa.unenroll(factorId);
   }
 
   /// Verified TOTP factors only — an in-progress, never-completed

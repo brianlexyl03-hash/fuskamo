@@ -75,7 +75,20 @@ class GroupService {
   }
 
   Stream<List<GroupMessage>> streamMessages(String groupId, {String channel = 'member'}) {
-    return _db.from('group_messages').stream(primaryKey: ['id']).eq('group_id', groupId).eq('channel', channel).order('created_at', ascending: true).map((rows) => rows.map((r) => GroupMessage.fromJson(Map<String, dynamic>.from(r))).where((m) => m.deletedAt == null).toList());
+    return _db.from('group_messages').stream(primaryKey: ['id']).map((rows) {
+    final filtered = rows.where((r) =>
+      r['group_id'] == groupId &&
+      r['channel'] == channel &&
+      r['deleted_at'] == null
+    ).toList();
+    filtered.sort((a, b) =>
+      DateTime.parse(a['created_at'].toString())
+        .compareTo(DateTime.parse(b['created_at'].toString()))
+    );
+    return filtered
+      .map((r) => GroupMessage.fromJson(Map<String, dynamic>.from(r)))
+      .toList();
+  });
   }
 
   Future<void> sendMessage(String groupId, String content, {String channel = 'member', String? replyToId}) async {
