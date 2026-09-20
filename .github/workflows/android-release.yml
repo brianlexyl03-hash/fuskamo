@@ -38,9 +38,9 @@ jobs:
       - name: Write key.properties
         run: |
           cat > android/key.properties << EOF
-          storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storePassword=${{ secrets.STOREPASS }}
+          keyPassword=${{ secrets.KEYPASS }}
+          keyAlias=${{ secrets.ALIAS }}
           storeFile=../fuskamo-release.jks
           EOF
 
