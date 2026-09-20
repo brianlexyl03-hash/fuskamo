@@ -6,6 +6,10 @@ name: Build Signed Android Release
 # toolchain is needed on your phone at all.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
