@@ -36,7 +36,17 @@ router.use('/admin-auth', require('./adminAuth.routes'));
 router.use('/admin-accounts', require('./adminAccounts.routes'));
 router.use('/external', require('./external.routes'));
 router.use('/search', require('./search.routes'));
-router.use('/notifications', require('./notifications.routes'));
+// router.use('/notifications', require('./notifications.routes'));
+// Removed: this hit an older `notifications` table by trusting :userId
+// straight from the URL with no ownership check (apiKeyAuth only — the
+// shared app key, not a per-user identity). Confirmed via full search that
+// nothing in lib/ ever calls it. The real, actively-used notification
+// system is /platform/notifications (platformOperations.routes.js),
+// which is properly gated by jwtAuth and scoped to req.user.id against
+// the current `notification_events` table. Left the old route file
+// in place unreferenced rather than deleting it outright, in case any
+// external/legacy caller still expects it to exist — re-enable only
+// after adding jwtAuth + an ownership check if that need ever comes up.
 router.use('/transactions', require('./transactions.routes'));
 router.use('/auth', require('./auth.routes'));
 router.use('/discovery', require('./discovery.routes'));

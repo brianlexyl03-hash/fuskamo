@@ -5,12 +5,17 @@ const apiKeyAuth = require('../authentication/apiKeyAuth');
 const adminAuth = require('../authentication/adminAuth');
 const { requirePermission } = require('../authorization/permissions');
 const { adminActionLimiter } = require('../middleware/adminRateLimiter');
-const { costlyEndpointLimiter } = require('../middleware/rateLimiter');
+const { costlyEndpointLimiter, apiLimiter } = require('../middleware/rateLimiter');
 const { stkPushRules, refundRules, validate } = require('../validators/mpesaValidators');
 
 router.post('/stk-push', apiKeyAuth, costlyEndpointLimiter, stkPushRules, validate, mpesaController.initiateStkPush);
-router.get('/status/:checkoutRequestId', apiKeyAuth, mpesaController.getStatus);
-router.get('/history/:phoneNumber', apiKeyAuth, mpesaController.getHistory);
+router.get('/status/:checkoutRequestId', apiKeyAuth, apiLimiter, mpesaController.getStatus);
+// getHistory by phone number was a real IDOR (any caller holding the
+// shared app key could pull any phone number's full payment history —
+// phone numbers aren't high-entropy secrets, unlike a Safaricom checkout
+// ID). Confirmed unused by both lib/ and web-app, so admin-only closes it
+// with no functional loss; admin-web can still reach it for support use.
+router.get('/history/:phoneNumber', adminAuth, requirePermission('payments', 'view'), mpesaController.getHistory);
 // Money movement — real admin auth + the specific payments:refund
 // permission, not the public app key. This previously used apiKeyAuth
 // (the key baked into every public install) + a role check that read an

@@ -36,7 +36,17 @@ app.use('/api', apiLimiter);
 app.use('/api/v1', v1Routes);
 app.use('/api', v1Routes);
 
+// Was fully public — anyone could see internal route names, per-route
+// traffic/latency, and M-Pesa payment attempt counts with no auth at all.
+// Gated behind a shared token instead (standard for Prometheus scrape
+// targets — point your scraper's Authorization header at it). Fails
+// closed: unset METRICS_TOKEN means this endpoint always 401s, which is
+// the safe default since nothing currently scrapes it.
 app.get('/metrics', async (req, res) => {
+  const token = (req.header('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!process.env.METRICS_TOKEN || token !== process.env.METRICS_TOKEN) {
+    return res.status(401).json({ error: true, message: 'Unauthorized' });
+  }
   res.set('Content-Type', metricsRegister.contentType);
   res.end(await metricsRegister.metrics());
 });
