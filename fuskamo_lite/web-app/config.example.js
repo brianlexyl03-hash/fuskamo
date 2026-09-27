@@ -1,6 +1,0 @@
-window.FUSKAMO_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
-  BACKEND_BASE_URL: "",
-  BACKEND_API_KEY: ""
-};

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../models/messaging_models.dart';
@@ -20,9 +21,50 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _sending = false;
   String? _replyTo;
 
+  Timer? _typingPollTimer;
+  Timer? _typingStopTimer;
+  bool _otherTyping = false;
+  bool _iAmTyping = false;
+  final Set<String> _deliveredMarked = {};
+  final Set<String> _readMarked = {};
+
   @override
-  void initState() { super.initState(); _repo.markRead(widget.conversationId); }
-  @override void dispose() { _controller.dispose(); _scroll.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    _repo.markRead(widget.conversationId);
+    _typingPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted) return;
+      final typing = await _repo.isTyping(widget.conversationId).catchError((_) => false);
+      if (mounted && typing != _otherTyping) setState(() => _otherTyping = typing);
+    });
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _typingPollTimer?.cancel();
+    _typingStopTimer?.cancel();
+    if (_iAmTyping) _repo.setTyping(widget.conversationId, false);
+    _controller.removeListener(_onTextChanged);
+    _controller.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final hasText = _controller.text.trim().isNotEmpty;
+    if (hasText && !_iAmTyping) {
+      _iAmTyping = true;
+      _repo.setTyping(widget.conversationId, true);
+    }
+    _typingStopTimer?.cancel();
+    _typingStopTimer = Timer(const Duration(seconds: 3), () {
+      if (_iAmTyping) {
+        _iAmTyping = false;
+        _repo.setTyping(widget.conversationId, false);
+      }
+    });
+  }
 
   Future<void> _send() async {
     final text = _controller.text.trim();
@@ -32,10 +74,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
       await _repo.sendMessage(conversationId: widget.conversationId, body: text, replyToId: _replyTo);
       _controller.clear();
       _replyTo = null;
+      _typingStopTimer?.cancel();
+      if (_iAmTyping) { _iAmTyping = false; await _repo.setTyping(widget.conversationId, false); }
       await _repo.markRead(widget.conversationId);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not send message: $e')));
     } finally { if (mounted) setState(() => _sending = false); }
+  }
+
+  void _markIncoming(DirectMessage m) {
+    if (m.senderId == widget.other.userId) {
+      if (_deliveredMarked.add(m.id)) _repo.markDelivered(m.id);
+      if (_readMarked.add(m.id)) _repo.markMessageRead(m.id);
+    }
   }
 
   @override
@@ -43,7 +94,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     backgroundColor: AppColors.black,
     appBar: AppBar(
       titleSpacing: 0,
-      title: Row(children: [InitialsCircle(initials: widget.other.initials, size: 36), const SizedBox(width: 10), Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Flexible(child: Text(widget.other.displayName, overflow: TextOverflow.ellipsis, style: AppTheme.body(14, weight: FontWeight.w800))), const SizedBox(width: 5), VerifiedBadge.forProfile(widget.other, size: 16)]), Text(widget.other.role.toUpperCase(), style: AppTheme.body(9, color: AppColors.sub, weight: FontWeight.w700))]))]),
+      title: Row(children: [InitialsCircle(initials: widget.other.initials, size: 36), const SizedBox(width: 10), Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Flexible(child: Text(widget.other.displayName, overflow: TextOverflow.ellipsis, style: AppTheme.body(14, weight: FontWeight.w800))), const SizedBox(width: 5), VerifiedBadge.forProfile(widget.other, size: 16)]), AnimatedSwitcher(duration: const Duration(milliseconds: 200), child: _otherTyping ? Text('typing…', key: const ValueKey('typing'), style: AppTheme.body(9, color: AppColors.green, weight: FontWeight.w700)) : Text(widget.other.role.toUpperCase(), key: const ValueKey('role'), style: AppTheme.body(9, color: AppColors.sub, weight: FontWeight.w700)))]))]),
       actions: [PopupMenuButton<String>(onSelected: (v) async { if (v == 'block') { await _repo.block(widget.other.userId); if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account blocked.'))); Navigator.pop(context); } } }, itemBuilder: (_) => const [PopupMenuItem(value: 'block', child: Text('Block account'))])],
     ),
     body: Column(children: [
@@ -56,6 +107,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         return ListView.builder(controller: _scroll, padding: const EdgeInsets.fromLTRB(14, 18, 14, 20), itemCount: messages.length, itemBuilder: (_, i) {
           final m = messages[i];
           final mine = m.senderId != widget.other.userId;
+          if (!mine) _markIncoming(m);
           return GestureDetector(onLongPress: () => _messageMenu(m), child: Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .78), decoration: BoxDecoration(color: mine ? AppColors.green : AppColors.card, borderRadius: BorderRadius.circular(18)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (m.replyToId != null) Text('Replying to a message', style: AppTheme.body(9, color: mine ? AppColors.black : AppColors.sub)), Text(m.body, style: AppTheme.body(14, color: mine ? AppColors.black : AppColors.text)), const SizedBox(height: 3), Text(_time(m.createdAt), style: AppTheme.body(9, color: mine ? AppColors.black.withValues(alpha:.55) : AppColors.sub))]))));
         });
       })),

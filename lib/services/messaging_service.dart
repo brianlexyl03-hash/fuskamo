@@ -122,7 +122,13 @@ class MessagingService {
     return r as String?;
   }
 
-  Future<bool> reactToMessage(String messageId, String reaction) async => (_db.rpc('toggle_direct_message_reaction', params: {'p_message': messageId, 'p_reaction': reaction}) as Future).then((v)=>v as bool);
+  Future<bool> reactToMessage(String messageId, String reaction) async {
+    final result = await _db.rpc('toggle_direct_message_reaction', params: {
+      'p_message': messageId,
+      'p_reaction': reaction,
+    });
+    return result as bool;
+  }
 
   Future<void> markDelivered(String messageId) => _db.rpc('mark_direct_message_delivered', params: {'p_message': messageId});
   Future<void> markMessageRead(String messageId) => _db.rpc('mark_direct_message_read', params: {'p_message': messageId});
