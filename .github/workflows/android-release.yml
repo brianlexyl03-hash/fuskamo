@@ -61,3 +61,26 @@ jobs:
         with:
           name: fuskamo-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
+
+- name: Decode release keystore
+  run: |
+    mkdir -p android
+    echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
+    chmod 600 android/fuskamo-release.jks
+
+- name: Verify release keystore
+  run: |
+    keytool -list \
+      -keystore android/fuskamo-release.jks \
+      -storepass "${{ secrets.STOREPASS }}" \
+      -alias "${{ secrets.ALIAS }}" \
+      -keypass "${{ secrets.KEYPASS }}" >/dev/null
+
+- name: Write key.properties
+  run: |
+    cat > android/key.properties << EOF
+    storePassword=${{ secrets.STOREPASS }}
+    keyPassword=${{ secrets.KEYPASS }}
+    keyAlias=${{ secrets.ALIAS }}
+    storeFile=fuskamo-release.jks
+    EOF
