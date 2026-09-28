@@ -8,6 +8,7 @@ import '../helpers/messaging_launcher.dart';
 import '../helpers/toast_helper.dart';
 import '../models/player_model.dart';
 import '../providers/saved_players_provider.dart';
+import '../screens/player_card_screen.dart';
 import '../screens/video_player_screen.dart';
 import '../theme/app_theme.dart';
 import 'initials_circle.dart';
@@ -182,6 +183,8 @@ class PlayerCard extends StatelessWidget {
                             highlighted: saved.isSaved(player.id),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        _ghostButton('🃏', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlayerCardScreen(playerId: player.id)))),
                         const SizedBox(width: 8),
                         _ghostButton('↗', () {
                           onEngagement?.call('share');
