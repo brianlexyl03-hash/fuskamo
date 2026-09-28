@@ -1,9 +1,5 @@
 name: Build Signed Android Release
 
-# Manually triggered from the Actions tab — builds both a signed .apk
-# (install directly on your phone) and .aab (Play Store upload format)
-# entirely on GitHub's servers, so no local Flutter SDK or Android
-# toolchain is needed on your phone at all.
 on:
   workflow_dispatch: {}
   push:
@@ -14,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +19,7 @@ jobs:
           flutter-version: '3.35.0'
           channel: 'stable'
 
-      - name: Write .env (bundled as a build asset)
+      - name: Write .env
         run: |
           cat > .env << EOF
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
@@ -33,7 +30,18 @@ jobs:
           EOF
 
       - name: Decode release keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
+        run: |
+          mkdir -p android
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
+          chmod 600 android/fuskamo-release.jks
+
+      - name: Verify release keystore
+        run: |
+          keytool -list \
+            -keystore android/fuskamo-release.jks \
+            -storepass "${{ secrets.STOREPASS }}" \
+            -alias "${{ secrets.ALIAS }}" \
+            -keypass "${{ secrets.KEYPASS }}" >/dev/null
 
       - name: Write key.properties
         run: |
@@ -46,10 +54,10 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Build installable APK (for your phone)
+      - name: Build installable APK
         run: flutter build apk --release
 
-      - name: Build AAB (for Play Store upload)
+      - name: Build AAB
         run: flutter build appbundle --release
 
       - uses: actions/upload-artifact@v4
@@ -61,26 +69,3 @@ jobs:
         with:
           name: fuskamo-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
-
-- name: Decode release keystore
-  run: |
-    mkdir -p android
-    echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/fuskamo-release.jks
-    chmod 600 android/fuskamo-release.jks
-
-- name: Verify release keystore
-  run: |
-    keytool -list \
-      -keystore android/fuskamo-release.jks \
-      -storepass "${{ secrets.STOREPASS }}" \
-      -alias "${{ secrets.ALIAS }}" \
-      -keypass "${{ secrets.KEYPASS }}" >/dev/null
-
-- name: Write key.properties
-  run: |
-    cat > android/key.properties << EOF
-    storePassword=${{ secrets.STOREPASS }}
-    keyPassword=${{ secrets.KEYPASS }}
-    keyAlias=${{ secrets.ALIAS }}
-    storeFile=fuskamo-release.jks
-    EOF
