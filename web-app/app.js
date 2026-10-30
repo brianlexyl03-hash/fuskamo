@@ -361,7 +361,7 @@ RENDERERS.feed = async (el) => {
       </div>
     </div>
     <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>
-    <aside class="social-suggestions"><div class="suggestion-head"><span>Suggested for you</span><button onclick="go('/discover')">See all</button></div>${suggestionsHtml || '<p class="muted">Follow players, scouts and clubs to build your network.</p>'}<div class="suggestion-links"><button onclick="go('/discover')">Discover players</button><button onclick="go('/scouts')">Find scouts</button><button onclick="go('/groups')">Football groups</button><button onclick="go('/settings')">Settings</button></div><p class="suggestion-footer">FUSKAMO · Football, talent, community</p></aside>`;
+    <aside class="social-suggestions"><div class="suggestion-head"><span>Suggested for you</span><button onclick="go('/discover')">See all</button></div>${suggestionsHtml || '<p class="muted">Follow players, scouts and clubs to build your network.</p>'}<div class="suggestion-links"><button onclick="go('/discover')">Discover players</button><button onclick="go('/scouts')">Find scouts</button><button onclick="go('/groups')">Football groups</button><button onclick="go('/account-settings')">Settings</button></div><p class="suggestion-footer">FUSKAMO · Football, talent, community</p></aside>`;
   initFeedVideoAutoplay();
 };
 let composerFile = null;
