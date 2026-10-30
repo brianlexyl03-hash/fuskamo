@@ -80,7 +80,7 @@ async function router() {
   if (!CURRENT_USER) { showAuthGate(); return; }
   const { path, param } = parseHash();
   const viewId = 'view-' + path;
-  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
   document.querySelectorAll('.nav-tab').forEach((t) => t.classList.remove('active'));
   if (NAV_TABS[path]) {
     const tab = document.querySelector(`.nav-tab[data-tab="${NAV_TABS[path]}"]`);
@@ -89,11 +89,15 @@ async function router() {
   const el = document.getElementById(viewId);
   if (!el) { go('/feed'); return; }
   el.classList.add('active');
+  // Restart a shallow 3D camera move on every route change.
+  void el.offsetWidth;
+  requestAnimationFrame(() => el.classList.add('screen-arrive'));
   el.innerHTML = '<div class="spinner"></div>';
   document.getElementById('bottom-nav').style.display = 'flex';
   updateNavAvatar();
   try {
     await RENDERERS[path](el, param);
+    window.bindFuskamoDepth?.(el);
   } catch (e) {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg><p>${escapeHtml(e.message || 'Something went wrong loading this screen.')}</p></div>`;
   }
@@ -113,8 +117,11 @@ window.addEventListener('hashchange', router);
 
 // ---------- Auth ----------
 function showAuthGate() {
-  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
-  document.getElementById('view-auth').classList.add('active');
+  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
+  const authView = document.getElementById('view-auth');
+  authView.classList.add('active');
+  void authView.offsetWidth;
+  requestAnimationFrame(() => authView.classList.add('screen-arrive'));
   document.getElementById('bottom-nav').style.display = 'none';
 }
 function setAuthTab(tab) {
@@ -214,7 +221,7 @@ function avatarHtml(url, name, size = '') {
 }
 function badgeHtml(badgeType, verified) {
   if (!verified || !badgeType || badgeType === 'none') return '';
-  return `<span class="badge ${badgeType}">✓ ${badgeType}</span>`;
+  return `<span class="badge verified ${badgeType}">${escapeHtml(badgeType)}</span>`;
 }
 
 // ---------- Boot ----------
@@ -256,7 +263,7 @@ function initAuthParallax() {
   }
   router();
   initAuthParallax();
-  document.getElementById('splash').classList.add('hide');
+  // The cinematic welcome owns its own exit/skip timing; do not hide it on Supabase boot.
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') { CURRENT_USER = null; CURRENT_PROFILE = null; showAuthGate(); }
   });
@@ -324,6 +331,19 @@ RENDERERS.feed = async (el) => {
     }
   }
   el.innerHTML = `
+    <section class="field-hero" aria-label="FUSKAMO football talent network">
+      <div class="field-hero-copy">
+        <p class="eyebrow">THE GLOBAL FOOTBALL NETWORK</p>
+        <h1>MAKE YOUR<br>GAME <span>MATTER.</span></h1>
+        <p>Find your next opportunity. Put your football journey in front of the people who can move it forward.</p>
+        <div class="field-hero-actions">
+          <button type="button" class="btn" onclick="go('/discover')">Discover talent</button>
+          <button type="button" class="btn secondary" onclick="go('/reels')">Watch reels</button>
+        </div>
+      </div>
+      <div class="field-hero-player" aria-hidden="true"></div>
+      <div class="field-hero-index">FUSKAMO / 001 — BUILT FOR THE GAME</div>
+    </section>
     <div class="composer-row">
       ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
       <div style="flex:1">
@@ -352,7 +372,7 @@ function previewComposerFile() {
   const isVideo = composerFile.type.startsWith('video');
   box.innerHTML = `<div style="position:relative;margin-top:8px">
     ${isVideo ? `<video src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px" controls></video>` : `<img src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px;object-fit:cover">`}
-    <button onclick="clearComposerFile()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer">✕</button>
+    <button onclick="clearComposerFile()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer" aria-label="Remove attachment"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   </div>`;
 }
 function clearComposerFile() {
@@ -647,7 +667,7 @@ RENDERERS.scouts = async (el) => {
   if (CURRENT_USER) { const { data } = await sb.from('scouts').select('id,verified').eq('user_id', CURRENT_USER.id).maybeSingle(); myApp = data; }
   el.innerHTML = `<h2 style="margin-bottom:14px">Scouts</h2>
     ${!myApp ? `<div class="card"><p style="margin-bottom:10px">Are you a scout, coach, or club rep?</p><button class="btn secondary" onclick="go('/scout-apply')">Apply as a scout</button></div>`
-      : (myApp.verified ? `<div class="card"><p>✓ You're a verified scout. <a onclick="go('/scout-preferences')" style="color:var(--green);cursor:pointer">Set your preferences →</a></p></div>` : `<div class="card"><p class="muted">Your scout application is under review.</p></div>`)}
+      : (myApp.verified ? `<div class="card"><p><span class="verified-mark">Verified</span> Your scout profile is verified. <a onclick="go('/scout-preferences')" style="color:var(--green);cursor:pointer">Set your preferences →</a></p></div>` : `<div class="card"><p class="muted">Your scout application is under review.</p></div>`)}
     ${(scouts || []).map((s) => `<div class="card row between">
       <div class="row">${avatarHtml(null, s.name)}<div><div style="font-weight:600">${escapeHtml(s.name)}${badgeHtml(s.badge_type, s.verified)}</div><div class="muted">${escapeHtml(s.organization || '')}</div></div></div>
     </div>`).join('') || emptyHtml('No scouts yet', '')}`;
@@ -709,9 +729,12 @@ RENDERERS.groups = async (el) => {
   const discover = (pub || []).filter((g) => !mine.find((m) => m.id === g.id));
   const allGroups = [...mine, ...discover];
   const { byGroup = {}, profiles = {} } = await fetchHostsForGroups(allGroups.map((g) => g.id));
-  el.innerHTML = `<div class="row between" style="margin-bottom:14px"><h2>Groups</h2><button class="btn btn-sm" onclick="go('/create-group')">+ New</button></div>
-    ${mine.length ? `<h3 style="margin-bottom:8px">Joined</h3>${mine.map((g) => groupCard(g, byGroup[g.id], profiles)).join('')}<div class="divider"></div>` : ''}
-    <h3 style="margin-bottom:8px">Discover</h3>
+  el.innerHTML = `<header class="section-masthead">
+      <div><p class="eyebrow">FUSKAMO / COMMUNITY</p><h2>Find your people.</h2><p class="muted">Build a squad, share knowledge and keep the game moving.</p></div>
+      <button class="btn btn-sm" onclick="go('/create-group')">Create group</button>
+    </header>
+    ${mine.length ? `<h3 class="section-label">Your groups</h3>${mine.map((g) => groupCard(g, byGroup[g.id], profiles)).join('')}<div class="divider"></div>` : ''}
+    <h3 class="section-label">Explore communities</h3>
     ${discover.map((g) => groupCard(g, byGroup[g.id], profiles)).join('') || emptyHtml('No public groups yet', 'Start one!')}`;
 };
 function groupCard(g, hostIds, profiles) {
@@ -720,7 +743,7 @@ function groupCard(g, hostIds, profiles) {
     <div class="top">
       <div class="group-avatar">${g.avatar_url ? `<img src="${escapeHtml(g.avatar_url)}">` : initials(g.name)}</div>
       <div style="flex:1">
-        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? ' ✓' : ''}${g.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>` : ''}</div>
+        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? '<span class="verified-mark">Verified</span>' : ''}${g.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>` : ''}</div>
         <div class="muted">${g.host_count} host${g.host_count === 1 ? '' : 's'} · ${g.member_count} members</div>
       </div>
     </div>
@@ -778,7 +801,8 @@ async function createGroup() {
     go('/group/' + data.id);
   } catch (e) { toast(e.message || 'Could not create group'); btn.disabled = false; btn.textContent = 'Create group'; }
 }
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '⚽'];
+const REACTION_VALUES = ['👍', '❤️', '😂', '🔥', '👏', '⚽'];
+const REACTION_LABELS = { '👍': 'Like', '❤️': 'Love', '😂': 'Funny', '🔥': 'On fire', '👏': 'Applause', '⚽': 'Football' };
 RENDERERS.group = async (el, id) => {
   const { data: group } = await sb.from('groups').select('*').eq('id', id).single();
   if (!group) { el.innerHTML = emptyHtml('Group not found', ''); return; }
@@ -803,7 +827,7 @@ RENDERERS.group = async (el, id) => {
         <div class="group-avatar">${group.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}">` : initials(group.name)}</div>
         ${canInvite ? `<button class="btn-sm secondary" onclick="generateInvite('${id}')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M16 3.5a4 4 0 0 1 0 8M8 12.5a4 4 0 0 1 0-8m0 8l8-8"/></svg>Invite</button>` : ''}
       </div>
-      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? ' ✓' : ''}${group.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${group.privacy}</span>` : ''}</div>
+      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? '<span class="verified-mark">Verified</span>' : ''}${group.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${group.privacy}</span>` : ''}</div>
       <p class="muted">${escapeHtml(group.description || '')}</p>
       <div class="stat-strip"><div class="stat"><b>${group.host_count}</b><span>hosts</span></div><div class="stat"><b>${group.member_count}</b><span>members</span></div><div class="stat"><b>${group.message_count}</b><span>posts</span></div></div>
       <div class="row between" style="margin-top:12px">
@@ -850,17 +874,17 @@ function groupPostHtml(m, profile, msgReactions, isPinned) {
     ${authorLine(profile, m.created_at)}
     <p style="margin-top:6px">${escapeHtml(m.content)}</p>
     <div class="reaction-row" id="reactions-${m.id}">
-      ${Object.entries(counts).map(([emoji, c]) => `<span class="reaction-pill ${c.mine ? 'mine' : ''}" onclick="toggleReaction('${m.id}','${emoji}',this)">${emoji} ${c.n}</span>`).join('')}
-      <span class="reaction-add" onclick="openEmojiPicker('${m.id}', this)">+ react</span>
+      ${Object.entries(counts).map(([reaction, c]) => `<button type="button" class="reaction-pill ${c.mine ? 'mine' : ''}" aria-label="${REACTION_LABELS[reaction] || 'Reaction'} ${c.n}" onclick="toggleReaction('${m.id}','${reaction}',this)">${REACTION_LABELS[reaction] || 'React'} <span>${c.n}</span></button>`).join('')}
+      <span class="reaction-add" onclick="openReactionPicker('${m.id}', this)">+ react</span>
     </div>
   </div>`;
 }
 let openPicker = null;
-function openEmojiPicker(msgId, addEl) {
+function openReactionPicker(msgId, addEl) {
   if (openPicker) { openPicker.remove(); openPicker = null; }
   const picker = document.createElement('div');
   picker.className = 'emoji-picker';
-  picker.innerHTML = REACTION_EMOJIS.map((e) => `<span onclick="toggleReaction('${msgId}','${e}',null);this.parentElement.remove()">${e}</span>`).join('');
+  picker.innerHTML = REACTION_VALUES.map((value) => `<button type="button" onclick="toggleReaction('${msgId}','${value}',null);this.parentElement.remove()">${REACTION_LABELS[value]}</button>`).join('');
   addEl.parentElement.appendChild(picker);
   openPicker = picker;
 }
@@ -987,58 +1011,126 @@ async function reviewMessageRequest(id, status, senderId) {
 }
 
 // ---------- REELS ----------
-RENDERERS.reels = async (el) => {
-  const { data: reels } = await sb.from('social_reels').select('*').eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(20);
-  const profiles = await fetchProfilesMap((reels || []).map((r) => r.author_id));
-  const liked = await myLikedSet('social_reel_likes', 'reel_id', (reels || []).map((r) => r.id));
-  if (!(reels || []).length) {
-    el.innerHTML = `<div class="reels-empty-upload">${emptyHtml('No reels yet', 'Be the first to upload one.')}
-      <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()"></div>`;
-    return;
-  }
-  el.innerHTML = `<div class="reels-scroll" id="reels-scroll">
-    ${(reels || []).map((r, i) => `<div class="reel-slide" data-index="${i}">
-      <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} loop muted playsinline onclick="toggleReelMute(this)"></video>
-      <div class="mute-hint" id="mute-hint-${i}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg></div>
-      <div class="reel-overlay">
-        <div class="meta">${authorLine(profiles[r.author_id], r.created_at)}<p style="margin:4px 0">${escapeHtml(r.caption)}</p></div>
-        <div class="reel-actions">
-          <span class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}">${HEART_SVG(liked.has(r.id))}<span class="cnt">${r.like_count}</span></span>
-          <label for="reel-file" class="engage-btn" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></label>
-        </div>
-      </div>
-    </div>`).join('')}
-  </div>
-  <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">`;
-  initReelsAutoplay();
+let REELS_FEED_MODE = 'recommended';
+let REELS_DATA = [];
+let REELS_VIEW_STARTS = new Map();
+const REEL_ICON = {
+  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-1-4v-3.5A7.5 7.5 0 0 1 11.5 4h1A7.5 7.5 0 0 1 20 11.5Z"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
+  save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-4-6 4Z"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>'
 };
+RENDERERS.reels = async (el) => {
+  el.innerHTML = `<div class="reels-head"><div><p class="eyebrow">FUSKAMO / WATCH</p><h2>Reels</h2><p class="muted">Short clips from the football community.</p></div><label class="btn reels-upload" for="reel-file">Post a reel</label></div>
+    <div class="reels-feed-tabs" role="tablist" aria-label="Reel feed">
+      <button type="button" role="tab" aria-selected="${REELS_FEED_MODE === 'recommended'}" class="${REELS_FEED_MODE === 'recommended' ? 'active' : ''}" onclick="setReelsFeed('recommended')">For you</button>
+      <button type="button" role="tab" aria-selected="${REELS_FEED_MODE === 'latest'}" class="${REELS_FEED_MODE === 'latest' ? 'active' : ''}" onclick="setReelsFeed('latest')">Latest</button>
+    </div>
+    <p class="reels-ranking-note">${REELS_FEED_MODE === 'recommended' ? 'Recommended from recent activity, meaningful engagement and watch completion. Recommendations may vary as people interact.' : 'Newest public reels first.'}</p>
+    <div id="reels-feed-content" class="reels-loading"><div class="spinner"></div><p>Loading reels…</p></div>
+    <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">`;
+  await loadReelsInto(el.querySelector('#reels-feed-content'));
+};
+async function setReelsFeed(mode) {
+  REELS_FEED_MODE = mode;
+  const el = document.getElementById('view-reels');
+  if (!el) return;
+  const tabs = el.querySelectorAll('.reels-feed-tabs button');
+  tabs.forEach((b) => { const active = (mode === 'recommended' ? b.textContent.trim() === 'For you' : b.textContent.trim() === 'Latest'); b.classList.toggle('active', active); b.setAttribute('aria-selected', String(active)); });
+  const note = el.querySelector('.reels-ranking-note');
+  if (note) note.textContent = mode === 'recommended' ? 'Recommended from recent activity, meaningful engagement and watch completion. Recommendations may vary as people interact.' : 'Newest public reels first.';
+  const content = el.querySelector('#reels-feed-content');
+  if (content) { content.innerHTML = '<div class="reels-loading"><div class="spinner"></div><p>Loading reels…</p></div>'; await loadReelsInto(content); }
+}
+async function loadReelsInto(content) {
+  let reels = [];
+  if (REELS_FEED_MODE === 'recommended') {
+    const { data, error } = await sb.rpc('get_social_reels', { p_limit: 30 });
+    if (!error) reels = data || [];
+    else console.warn('Recommended reels RPC unavailable; showing newest public reels.', error.message);
+  }
+  if (REELS_FEED_MODE === 'latest' || !reels.length) {
+    const { data, error } = await sb.from('social_reels').select('*').eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(30);
+    if (error) { content.innerHTML = emptyHtml('Reels could not load', 'Check your connection and try again.'); return; }
+    reels = data || [];
+  }
+  REELS_DATA = reels;
+  const profiles = await fetchProfilesMap(reels.map((r) => r.author_id));
+  const liked = await myLikedSet('social_reel_likes', 'reel_id', reels.map((r) => r.id));
+  if (!reels.length) { content.innerHTML = `<div class="reels-empty-upload">${emptyHtml('No reels yet', 'Be the first to upload a clip from your football life.')}</div>`; return; }
+  content.innerHTML = `<div class="reels-scroll" id="reels-scroll">
+    ${reels.map((r, i) => {
+      const author = profiles[r.author_id] || {};
+      const name = escapeHtml(author.display_name || author.username || 'FUSKAMO member');
+      const handle = author.username ? '@' + escapeHtml(author.username) : '';
+      const created = r.created_at ? timeAgo(r.created_at) : '';
+      return `<article class="reel-slide" data-index="${i}" data-reel-id="${escapeHtml(r.id)}">
+        <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} loop muted playsinline preload="${i === 0 ? 'auto' : 'metadata'}" aria-label="Reel by ${name}" onclick="toggleReelMute(this)"></video>
+        <div class="reel-top-controls"><span class="reel-sound-label">Tap video for sound</span><button class="reel-more" type="button" onclick="openReelFeedback('${r.id}')" aria-label="More reel options">${REEL_ICON.more}</button></div>
+        <div class="mute-hint" id="mute-hint-${i}">Sound ${'off'}</div>
+        <div class="reel-overlay">
+          <div class="meta">
+            <div class="reel-author">${avatarHtml(author.avatar_url, author.display_name || author.username || 'Member', 'sm')}<div><strong>${name}</strong><small>${handle ? handle + (created ? ' · ' : '') : ''}${escapeHtml(created)}</small></div></div>
+            <p>${escapeHtml(r.caption || '')}</p>
+          </div>
+          <div class="reel-actions">
+            <button type="button" class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}" aria-label="${liked.has(r.id) ? 'Unlike reel' : 'Like reel'}">${HEART_SVG(liked.has(r.id))}<span class="cnt">${Number(r.like_count || 0)}</span></button>
+            <button type="button" class="engage-btn" onclick="openReelComments('${r.id}')" aria-label="Open comments">${REEL_ICON.comment}<span class="cnt">${Number(r.comment_count || 0)}</span></button>
+            <button type="button" class="engage-btn" onclick="shareReel('${r.id}')" aria-label="Share reel">${REEL_ICON.share}<span class="cnt">Share</span></button>
+            <button type="button" class="engage-btn" onclick="saveReel('${r.id}', this)" aria-label="Save reel">${REEL_ICON.save}<span class="cnt">Save</span></button>
+          </div>
+        </div>
+      </article>`;
+    }).join('')}
+  </div>`;
+  initReelsAutoplay();
+}
 function initReelsAutoplay() {
-  const slides = document.querySelectorAll('.reel-slide video');
+  const videos = [...document.querySelectorAll('#reels-scroll .reel-slide video')];
+  if (!videos.length) return;
+  if (!('IntersectionObserver' in window)) { videos[0].play().catch(() => {}); return; }
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       const video = entry.target;
-      if (entry.isIntersecting && entry.intersectionRatio > 0.6) video.play().catch(() => {});
-      else video.pause();
+      const slide = video.closest('.reel-slide');
+      const reelId = slide?.dataset.reelId;
+      if (entry.isIntersecting && entry.intersectionRatio > .65) {
+        video.play().catch(() => {});
+        if (reelId && !REELS_VIEW_STARTS.has(reelId)) REELS_VIEW_STARTS.set(reelId, { started: Date.now(), completed: false, rewatch: 0 });
+      } else {
+        video.pause();
+        if (reelId && REELS_VIEW_STARTS.has(reelId)) {
+          const view = REELS_VIEW_STARTS.get(reelId);
+          const watchMs = Math.max(0, Date.now() - view.started);
+          if (watchMs > 900) sb.rpc('record_reel_view', { p_reel: reelId, p_session: reelSessionId(), p_watch_ms: watchMs, p_completed: watchMs >= (video.duration || Infinity) * 800, p_rewatch: view.rewatch || 0 }).then(() => {}).catch(() => {});
+          REELS_VIEW_STARTS.delete(reelId);
+        }
+      }
     });
-  }, { threshold: [0, 0.6, 1] });
-  slides.forEach((v) => observer.observe(v));
-  if (slides[0]) slides[0].play().catch(() => {});
+  }, { threshold: [0, .25, .65, 1] });
+  videos.forEach((v) => observer.observe(v));
+  videos[0].play().catch(() => {});
+}
+function reelSessionId() {
+  if (!window.__fuskamoReelSession) window.__fuskamoReelSession = (window.crypto?.randomUUID ? crypto.randomUUID() : 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  return window.__fuskamoReelSession;
 }
 function toggleReelMute(video) {
   video.muted = !video.muted;
-  const idx = video.closest('.reel-slide').dataset.index;
-  const hint = document.getElementById('mute-hint-' + idx);
-  hint.innerHTML = video.muted
-    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 9l4 6m0-6l-4 6" stroke="#fff" stroke-width="2"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg>`;
-  hint.classList.add('show');
-  setTimeout(() => hint.classList.remove('show'), 900);
+  const slide = video.closest('.reel-slide');
+  const hint = slide?.querySelector('.mute-hint');
+  if (hint) { hint.textContent = video.muted ? 'Sound off' : 'Sound on'; hint.classList.add('show'); setTimeout(() => hint.classList.remove('show'), 850); }
+  const label = slide?.querySelector('.reel-sound-label');
+  if (label) label.textContent = video.muted ? 'Tap video for sound' : 'Sound on';
 }
 async function uploadNewReel() {
-  if (!requireAuth()) { document.getElementById('reel-file').value = ''; return; }
-  const file = document.getElementById('reel-file').files[0];
+  const input = document.getElementById('reel-file');
+  if (!requireAuth()) { if (input) input.value = ''; return; }
+  const file = input?.files?.[0];
   if (!file) return;
-  toast('Uploading reel...');
+  if (!file.type.startsWith('video/')) { toast('Choose a video file.'); input.value = ''; return; }
+  if (file.size > 150 * 1024 * 1024) { toast('Video must be under 150 MB.'); input.value = ''; return; }
+  toast('Uploading reel…');
   try {
     const videoUrl = await uploadToStorage('reel-media', file);
     const caption = prompt('Add a caption (optional):', '') || '';
@@ -1047,18 +1139,126 @@ async function uploadNewReel() {
     toast('Reel posted');
     router();
   } catch (e) { toast(e.message || 'Upload failed'); }
+  finally { if (input) input.value = ''; }
 }
-async function toggleReelLike(reelId, span) {
+async function toggleReelLike(reelId, button) {
   if (!requireAuth()) return;
-  const liked = span.dataset.liked === 'true';
-  if (liked) await sb.from('social_reel_likes').delete().eq('reel_id', reelId).eq('user_id', CURRENT_USER.id);
-  else await sb.from('social_reel_likes').insert({ reel_id: reelId, user_id: CURRENT_USER.id });
-  const cnt = span.querySelector('.cnt');
-  cnt.textContent = parseInt(cnt.textContent) + (liked ? -1 : 1);
-  span.dataset.liked = (!liked).toString();
-  span.classList.toggle('liked', !liked);
+  if (button.dataset.busy === 'true') return;
+  button.dataset.busy = 'true'; button.disabled = true;
+  const wasLiked = button.dataset.liked === 'true';
+  const nextLiked = !wasLiked;
+  const count = button.querySelector('.cnt');
+  const previousCount = Number(count?.textContent || 0);
+  button.dataset.liked = String(nextLiked);
+  button.classList.toggle('liked', nextLiked);
+  button.setAttribute('aria-label', nextLiked ? 'Unlike reel' : 'Like reel');
+  if (count) count.textContent = String(Math.max(0, previousCount + (nextLiked ? 1 : -1)));
+  try {
+    const { data, error } = await sb.rpc('toggle_reel_like', { p_reel: reelId });
+    if (error) throw error;
+    if (typeof data === 'boolean' && data !== nextLiked) {
+      button.dataset.liked = String(data); button.classList.toggle('liked', data);
+      if (count) count.textContent = String(Math.max(0, previousCount + (data ? 1 : -1)));
+    }
+  } catch (e) {
+    button.dataset.liked = String(wasLiked); button.classList.toggle('liked', wasLiked);
+    if (count) count.textContent = String(previousCount);
+    toast(e.message || 'Could not update like');
+  } finally { button.disabled = false; button.dataset.busy = 'false'; }
 }
-
+async function openReelComments(reelId) {
+  const { data: rows, error } = await sb.from('social_reel_comments').select('*').eq('reel_id', reelId).eq('status', 'published').order('created_at', { ascending: true }).limit(200);
+  if (error) { toast('Comments are unavailable right now.'); return; }
+  const profiles = await fetchProfilesMap((rows || []).map((c) => c.author_id));
+  const roots = (rows || []).filter((c) => !c.parent_id);
+  const replies = (id) => (rows || []).filter((c) => c.parent_id === id);
+  const renderComment = (c, nested = false) => {
+    const p = profiles[c.author_id] || {};
+    const display = escapeHtml(p.display_name || p.username || 'Member');
+    return `<div class="reel-comment ${nested ? 'reply' : ''}"><div class="reel-comment-avatar">${avatarHtml(p.avatar_url, p.display_name || p.username || 'Member', 'sm')}</div><div class="reel-comment-body"><div class="reel-comment-meta"><strong>${display}</strong><small>${escapeHtml(timeAgo(c.created_at))}</small></div><p>${escapeHtml(c.body)}</p>${!nested ? `<button type="button" class="text-action" onclick="toggleReelReplyBox('${c.id}')">Reply</button><div class="reel-reply-box" id="reply-box-${c.id}" hidden><input id="reply-input-${c.id}" maxlength="2000" placeholder="Write a reply" aria-label="Reply to ${display}"><button class="btn" type="button" onclick="submitReelComment('${reelId}','reply-input-${c.id}','${c.id}')">Reply</button></div>${replies(c.id).map((reply) => renderComment(reply, true)).join('')}` : ''}</div></div>`;
+  };
+  const overlay = document.createElement('div'); overlay.className = 'reel-dialog-backdrop'; overlay.id = 'reel-comments-backdrop';
+  overlay.innerHTML = `<section class="reel-comments-sheet" role="dialog" aria-modal="true" aria-labelledby="reel-comments-title"><div class="sheet-grabber"></div><div class="row between"><div><h3 id="reel-comments-title">Comments</h3><p class="muted">${(rows || []).length} comments · keep it respectful</p></div><button class="icon-btn" type="button" onclick="closeReelDialog()" aria-label="Close comments">Close</button></div><div class="reel-comments-list">${roots.map((c) => renderComment(c)).join('') || '<p class="muted" style="padding:16px 0">No comments yet. Start the conversation.</p>'}</div><form class="reel-comment-composer" onsubmit="event.preventDefault();submitReelComment('${reelId}','reel-comment-input')"><input id="reel-comment-input" maxlength="2000" placeholder="${CURRENT_USER ? 'Add a comment…' : 'Sign in to comment'}" aria-label="Add a comment" ${CURRENT_USER ? '' : 'disabled'}><button class="btn" type="submit" ${CURRENT_USER ? '' : 'disabled'}>Post</button></form></section>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeReelDialog(); });
+  document.addEventListener('keydown', reelDialogEscape);
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.querySelector('#reel-comment-input')?.focus(), 80);
+}
+function reelDialogEscape(e) { if (e.key === 'Escape') closeReelDialog(); }
+function closeReelDialog() { document.getElementById('reel-comments-backdrop')?.remove(); document.getElementById('reel-feedback-backdrop')?.remove(); document.removeEventListener('keydown', reelDialogEscape); }
+function toggleReelReplyBox(id) { const box = document.getElementById('reply-box-' + id); if (box) box.hidden = !box.hidden; }
+async function submitReelComment(reelId, inputId, parentId = null) {
+  if (!requireAuth()) return;
+  const input = document.getElementById(inputId); const body = input?.value?.trim();
+  if (!body) { input?.focus(); return; }
+  if (body.length > 2000) { toast('Comments must be 2,000 characters or fewer.'); return; }
+  const submit = input.closest('form')?.querySelector('button[type="submit"]') || input.parentElement?.querySelector('button');
+  if (submit) { submit.disabled = true; submit.dataset.oldText = submit.textContent; submit.textContent = 'Posting…'; }
+  try {
+    const { error } = await sb.from('social_reel_comments').insert({ reel_id: reelId, author_id: CURRENT_USER.id, parent_id: parentId, body });
+    if (error) throw error;
+    const { error: countError } = await sb.rpc('refresh_social_reel_counts', { p_reel: reelId });
+    if (countError) console.warn('Comment posted; count refresh will catch up.', countError.message);
+    toast('Comment posted');
+    closeReelDialog();
+    const active = document.querySelector(`.reel-slide[data-reel-id="${CSS.escape(reelId)}"] .reel-actions .engage-btn:nth-child(2) .cnt`);
+    if (active) active.textContent = String(Number(active.textContent || 0) + 1);
+    await openReelComments(reelId);
+  } catch (e) { toast(e.message || 'Could not post comment'); }
+  finally { if (submit) { submit.disabled = false; submit.textContent = submit.dataset.oldText || 'Post'; } }
+}
+async function saveReel(reelId, button) {
+  if (!requireAuth()) return;
+  button.disabled = true;
+  try {
+    const { data, error } = await sb.rpc('toggle_reel_save', { p_reel: reelId });
+    if (error) throw error;
+    const saved = Boolean(data);
+    button.classList.toggle('saved', saved);
+    const cnt = button.querySelector('.cnt'); if (cnt) cnt.textContent = saved ? 'Saved' : 'Save';
+    button.setAttribute('aria-label', saved ? 'Unsave reel' : 'Save reel');
+    toast(saved ? 'Saved to your collection' : 'Removed from saved reels');
+  } catch (e) { toast(e.message || 'Save is unavailable'); }
+  finally { button.disabled = false; }
+}
+async function shareReel(reelId) {
+  const reel = REELS_DATA.find((r) => r.id === reelId);
+  const url = reel ? new URL(window.location.href) : new URL(window.location.href);
+  url.searchParams.set('reel', reelId);
+  try {
+    if (navigator.share) await navigator.share({ title: 'FUSKAMO reel', text: reel?.caption || 'Watch this reel on FUSKAMO', url: url.toString() });
+    else if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url.toString()); toast('Reel link copied'); }
+    else { window.prompt('Copy this reel link', url.toString()); }
+    if (CURRENT_USER) { const { error } = await sb.rpc('record_reel_share', { p_reel: reelId, p_channel: 'share_sheet' }); if (error) console.warn('Share could not be recorded', error.message); }
+  } catch (e) { if (e.name !== 'AbortError') toast('Could not share reel'); }
+}
+function openReelFeedback(reelId) {
+  closeReelDialog();
+  const overlay = document.createElement('div'); overlay.className = 'reel-dialog-backdrop'; overlay.id = 'reel-feedback-backdrop';
+  overlay.innerHTML = `<section class="reel-feedback-sheet" role="dialog" aria-modal="true" aria-label="Reel preferences"><div class="row between"><div><h3>Reel preferences</h3><p class="muted">Help shape what appears in your feed.</p></div><button type="button" class="icon-btn" onclick="closeReelDialog()">Close</button></div><button class="reel-feedback-option" onclick="sendReelFeedback('${reelId}','not_interested')"><strong>Not interested</strong><span>Show fewer reels like this.</span></button><button class="reel-feedback-option" onclick="sendReelFeedback('${reelId}','show_more')"><strong>Show me more like this</strong><span>Help improve your recommendations.</span></button><button class="reel-feedback-option" onclick="sendReelFeedback('${reelId}','report')"><strong>Report this reel</strong><span>Flag content that may violate community rules.</span></button></section>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeReelDialog(); }); document.addEventListener('keydown', reelDialogEscape); document.body.appendChild(overlay);
+}
+async function sendReelFeedback(reelId, feedback) {
+  if (!requireAuth()) return;
+  try {
+    if (feedback === 'report') {
+      const options = ['spam','harassment','impersonation','scam','hate','sexual','violence','copyright','misinformation','other'];
+      const choice = window.prompt('Choose a report reason: ' + options.join(', '), 'other');
+      const reason = options.includes((choice || '').trim().toLowerCase()) ? choice.trim().toLowerCase() : null;
+      if (!reason) { toast('Choose one of the listed report reasons.'); return; }
+      const details = window.prompt('Optional details for the review team (up to 2,000 characters):', '') || '';
+      const { error } = await sb.from('content_reports').insert({ reporter_id: CURRENT_USER.id, target_type: 'reel', target_id: reelId, reason, details: details.slice(0, 2000) });
+      if (error) throw error;
+      toast('Report submitted for review');
+    } else {
+      const { error } = await sb.from('social_reel_feedback').upsert({ reel_id: reelId, user_id: CURRENT_USER.id, feedback });
+      if (error) throw error;
+      toast(feedback === 'not_interested' ? 'We’ll try to show you fewer reels like this' : 'Thanks — recommendations updated');
+    }
+    closeReelDialog();
+    if (feedback === 'not_interested') { const slide = document.querySelector(`.reel-slide[data-reel-id="${CSS.escape(reelId)}"]`); slide?.remove(); }
+  } catch (e) { toast(e.message || 'Could not save this preference'); }
+}
 // ---------- SCOREBOARD ----------
 RENDERERS.scoreboard = async (el) => {
   const { data: season } = await sb.from('scoreboard_seasons').select('*').eq('active', true).maybeSingle();
@@ -1080,7 +1280,7 @@ RENDERERS.achievements = async (el) => {
   el.innerHTML = `<h2 style="margin-bottom:14px">Achievements</h2>
     ${(all || []).map((a) => { const earned = earnedIds.has(a.id); const p = progMap[a.id];
       return `<div class="card row between" style="opacity:${earned ? 1 : 0.6}">
-        <div class="row"><span style="font-size:22px">${a.icon}</span><div><div style="font-weight:600">${escapeHtml(a.name)}</div><div class="muted">${escapeHtml(a.description)}</div></div></div>
+        <div class="row"><span class="achievement-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5m-4 2h8m-7 0v-2h6v2"/></svg></span><div><div style="font-weight:600">${escapeHtml(a.name)}</div><div class="muted">${escapeHtml(a.description)}</div></div></div>
         ${earned ? '<span class="badge blue">Earned</span>' : (p ? `<span class="muted">${p.progress}/${p.target}</span>` : '')}
       </div>`; }).join('')}`;
 };
@@ -1401,7 +1601,7 @@ RENDERERS['mfa-setup'] = async (el) => {
   const { data: factors } = await sb.auth.mfa.listFactors();
   const verified = (factors?.totp || []).filter((f) => f.status === 'verified');
   if (verified.length) {
-    el.innerHTML = `<h2 style="margin-bottom:14px">Two-Factor Authentication</h2><div class="card"><p>✓ Enabled</p><button class="btn danger btn-sm" style="margin-top:10px" onclick="disableMfa('${verified[0].id}')">Disable</button></div>`;
+    el.innerHTML = `<h2 style="margin-bottom:14px">Two-Factor Authentication</h2><div class="card"><p><span class="verified-mark">Enabled</span> Two-factor authentication</p><button class="btn danger btn-sm" style="margin-top:10px" onclick="disableMfa('${verified[0].id}')">Disable</button></div>`;
     return;
   }
   el.innerHTML = `<h2 style="margin-bottom:14px">Two-Factor Authentication</h2><p class="muted" style="margin-bottom:14px">Add an authenticator app for extra security.</p><button class="btn" onclick="enrollMfa()">Set up 2FA</button><div id="mfa-qr" style="margin-top:16px"></div>`;
