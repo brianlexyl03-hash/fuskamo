@@ -245,3 +245,18 @@ label{font-size:13px;color:#c7c7c7}
  .profile-grid{gap:2px}
  .settings-link{padding:12px 14px}
 }
+
+.player-profile-card{max-width:760px;margin:0 auto;padding:22px;border:1px solid #26272b;border-radius:14px;background:#111317}
+.player-profile-top{display:flex;align-items:center;gap:18px;padding-bottom:20px;border-bottom:1px solid #26272b}
+.player-profile-avatar{width:92px;height:92px;flex:0 0 92px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#24262b,#111317);border:1px solid #393a40;font-size:30px;font-weight:700}
+.player-profile-top h1{font-size:26px;margin:4px 0}
+.player-profile-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}
+.player-profile-stats span{display:flex;flex-direction:column;gap:5px;min-width:0}
+.player-profile-stats b{font-size:14px;overflow-wrap:anywhere}
+.player-profile-stats small{font-size:11px;color:#a8a8a8}
+.player-profile-card h3{font-size:16px;margin:20px 0 8px}
+.player-profile-card p{line-height:1.6;overflow-wrap:anywhere}
+.player-profile-card video{margin-top:10px}
+.scout-result{gap:12px}
+.scout-result .row{min-width:0}
+@media(max-width:760px){.player-profile-card{margin:0 12px;padding:16px}.player-profile-top{align-items:flex-start;gap:12px}.player-profile-avatar{width:72px;height:72px;flex-basis:72px;font-size:24px}.player-profile-top h1{font-size:21px}.player-profile-card .row>.btn{flex:1;padding:0 10px}.scout-result .btn{font-size:12px}}
