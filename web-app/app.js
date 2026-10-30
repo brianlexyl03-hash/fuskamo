@@ -984,8 +984,11 @@ async function reviewJoinRequest(reqId, status, groupId, userId) {
 // ---------- MESSAGES ----------
 RENDERERS.messages = async (el) => {
   if (!requireAuth()) return;
-  const { data: reqs } = await sb.from('message_requests').select('*').eq('recipient_id', CURRENT_USER.id).eq('status', 'pending');
-  const { data: parts } = await sb.from('direct_conversation_participants').select('conversation_id').eq('user_id', CURRENT_USER.id);
+  const [{ data: reqs }, { data: parts }] = await Promise.all([
+    sb.from('message_requests').select('id').eq('recipient_id', CURRENT_USER.id).eq('status', 'pending'),
+    sb.from('direct_conversation_participants').select('conversation_id,last_read_at').eq('user_id', CURRENT_USER.id)
+  ]);
+  const participantByConversation = Object.fromEntries((parts || []).map((p) => [p.conversation_id, p]));
   const convIds = (parts || []).map((p) => p.conversation_id);
   const { data: convs } = convIds.length ? await sb.from('direct_conversations').select('*').in('id', convIds).order('last_message_at', { ascending: false }) : { data: [] };
   const items = [];
@@ -993,14 +996,69 @@ RENDERERS.messages = async (el) => {
     const { data: others } = await sb.from('direct_conversation_participants').select('user_id').eq('conversation_id', c.id).neq('user_id', CURRENT_USER.id);
     const otherId = others && others[0] ? others[0].user_id : null;
     const profiles = otherId ? await fetchProfilesMap([otherId]) : {};
-    items.push({ conv: c, other: profiles[otherId] });
+    const participant = participantByConversation[c.id];
+    const { data: latestMessages } = await sb.from('direct_messages').select('body,sender_id,created_at').eq('conversation_id', c.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(1);
+    const latest = latestMessages && latestMessages[0];
+    const unread = !!(latest && latest.sender_id !== CURRENT_USER.id && (!participant?.last_read_at || new Date(latest.created_at) > new Date(participant.last_read_at)));
+    const preview = latest ? ((latest.sender_id === CURRENT_USER.id ? 'You: ' : '') + (latest.body || 'Shared a message')) : (c.last_message_at ? 'Open conversation' : 'Start a conversation');
+    items.push({ conv: c, other: profiles[otherId], preview, unread, lastAt: latest?.created_at || c.last_message_at || c.created_at });
   }
-  el.innerHTML = `<h2 style="margin-bottom:14px">Messages</h2>
-    ${(reqs || []).length ? `<div class="card" onclick="go('/message-requests')" style="cursor:pointer"><div class="row between"><span>Message requests</span><span class="pill">${reqs.length}</span></div></div>` : ''}
-    ${items.map((it) => `<div class="card row" onclick="go('/conversation/${it.conv.id}')" style="cursor:pointer">
-      ${avatarHtml(it.other?.avatar_url, it.other?.display_name)}
-      <div><div style="font-weight:600">${escapeHtml(it.other?.display_name || 'Member')}</div><div class="muted">${it.conv.last_message_at ? timeAgo(it.conv.last_message_at) + ' ago' : 'New conversation'}</div></div>
-    </div>`).join('') || emptyHtml('No conversations yet', 'Message someone from their profile.')}`;
+  el.innerHTML = `
+    <section class="dm-shell">
+      <header class="dm-header">
+        <div class="dm-title-row"><div><p class="dm-eyebrow">YOUR COMMUNITY</p><h1>Messages</h1></div><button class="dm-compose" onclick="go('/search')" aria-label="Find someone to message"><span aria-hidden="true">＋</span><span>New message</span></button></div>
+        <label class="dm-search"><span aria-hidden="true">⌕</span><input id="dm-search" type="search" placeholder="Search conversations" autocomplete="off" oninput="filterInbox()"><button id="dm-clear-search" type="button" aria-label="Clear search" onclick="document.getElementById('dm-search').value='';filterInbox()" hidden>×</button></label>
+        <div class="dm-tabs" role="tablist" aria-label="Message filters">
+          <button class="dm-tab active" role="tab" aria-selected="true" data-filter="all" onclick="setInboxFilter('all',this)">All <span>${items.length}</span></button>
+          <button class="dm-tab" role="tab" aria-selected="false" data-filter="unread" onclick="setInboxFilter('unread',this)">Unread <span>${items.filter(x=>x.unread).length}</span></button>
+          <button class="dm-tab" role="tab" aria-selected="false" onclick="go('/message-requests')">Requests <span>${(reqs||[]).length}</span></button>
+          <button class="dm-filter-btn" onclick="openInboxFilters()" aria-label="More message filters" title="More filters">☷</button>
+        </div>
+      </header>
+      <div class="dm-inbox-meta"><span id="dm-results-label">Recent conversations</span><span>Private messages</span></div>
+      <div id="dm-inbox-list" class="dm-inbox-list">
+        ${items.map((it) => `<button class="dm-conversation" data-name="${escapeHtml((it.other?.display_name || 'Member').toLowerCase())}" data-preview="${escapeHtml(it.preview.toLowerCase())}" data-unread="${it.unread ? 'true' : 'false'}" onclick="go('/conversation/${it.conv.id}')">
+          <span class="dm-avatar-wrap">${avatarHtml(it.other?.avatar_url, it.other?.display_name, 'md')}${it.unread ? '<i class="dm-online-dot" aria-label="Unread"></i>' : ''}</span>
+          <span class="dm-conversation-copy"><strong>${escapeHtml(it.other?.display_name || 'FUSKAMO Member')}</strong><span class="dm-preview">${escapeHtml(it.preview)}</span></span>
+          <span class="dm-conversation-side"><time>${it.lastAt ? timeAgo(it.lastAt) : ''}</time>${it.unread ? '<i class="dm-unread-dot"></i>' : '<span class="dm-chevron" aria-hidden="true">›</span>'}</span>
+        </button>`).join('')}
+      </div>
+      <div id="dm-empty-state" class="dm-empty" ${items.length ? 'hidden' : ''}><div class="dm-empty-icon">↗</div><h2>No conversations yet</h2><p>Find a player, scout, club or community member to start a conversation.</p><button class="btn" onclick="go('/search')">Discover people</button></div>
+    </section>`;
+  window.__fuskamoInboxFilter = 'all';
+};
+window.setInboxFilter = (filter, button) => {
+  window.__fuskamoInboxFilter = filter;
+  document.querySelectorAll('.dm-tab[data-filter]').forEach((tab) => { const active = tab === button; tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active)); });
+  filterInbox();
+};
+window.filterInbox = () => {
+  const search = (document.getElementById('dm-search')?.value || '').trim().toLowerCase();
+  const clear = document.getElementById('dm-clear-search');
+  if (clear) clear.hidden = !search;
+  const filter = window.__fuskamoInboxFilter || 'all';
+  const rows = [...document.querySelectorAll('.dm-conversation')];
+  let visible = 0;
+  rows.forEach((row) => { const matches = ((row.dataset.name || '').includes(search) || (row.dataset.preview || '').includes(search)) && (filter !== 'unread' || row.dataset.unread === 'true'); row.hidden = !matches; if (matches) visible++; });
+  const label = document.getElementById('dm-results-label');
+  if (label) label.textContent = search ? 'Search results' : filter === 'unread' ? 'Unread conversations' : 'Recent conversations';
+  const empty = document.getElementById('dm-empty-state');
+  if (empty && rows.length) {
+    empty.hidden = visible !== 0;
+    if (!visible) {
+      const title = empty.querySelector('h2'); const copy = empty.querySelector('p'); const action = empty.querySelector('button');
+      if (title) title.textContent = search ? 'No matching conversations' : 'You’re all caught up';
+      if (copy) copy.textContent = search ? 'Try another name or keyword.' : 'New messages will appear here.';
+      if (action) action.hidden = !search;
+    }
+  }
+};
+window.openInboxFilters = () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'dm-sheet-overlay';
+  overlay.innerHTML = `<section class="dm-filter-sheet" role="dialog" aria-modal="true" aria-labelledby="dm-filter-title"><div class="dm-sheet-grabber"></div><div class="dm-sheet-title"><h2 id="dm-filter-title">Message filters</h2><button type="button" aria-label="Close filters" onclick="this.closest('.dm-sheet-overlay').remove()">×</button></div><p>Choose how to view your conversations.</p><button class="dm-filter-choice" onclick="this.closest('.dm-sheet-overlay').remove();setInboxFilter('all',document.querySelector('.dm-tab[data-filter=all]'))"><span><b>All conversations</b><small>Show every conversation</small></span><span>›</span></button><button class="dm-filter-choice" onclick="this.closest('.dm-sheet-overlay').remove();setInboxFilter('unread',document.querySelector('.dm-tab[data-filter=unread]'))"><span><b>Unread messages</b><small>Focus on conversations you haven't read</small></span><span>›</span></button><button class="btn dm-sheet-done" onclick="this.closest('.dm-sheet-overlay').remove()">Done</button></section>`;
+  overlay.addEventListener('click', (event) => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 };
 RENDERERS.conversation = async (el, id) => {
   if (!requireAuth()) return;
