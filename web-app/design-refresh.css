@@ -37,3 +37,22 @@ input,textarea,select{width:100%;padding:13px 14px;background:#0E120F;border:1px
 .auth-art-image:after{content:"";position:absolute;right:3%;bottom:0;top:0;width:min(43%,520px);background:url('https://images.pexels.com/photos/14445158/pexels-photo-14445158.jpeg?auto=compress&cs=tinysrgb&w=1400') center 25%/cover no-repeat;opacity:.42;mix-blend-mode:screen;mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.65) 22%,black 70%);transform:translateZ(10px);filter:grayscale(.3) contrast(1.12)}
 @media(max-width:900px){.field-hero{min-height:290px;padding:25px 22px}.field-hero-copy{max-width:67%}.field-hero-copy h1{font-size:clamp(44px,9vw,66px)}.field-hero-player{width:51%;opacity:.56}.field-hero-index{right:12px;bottom:11px;font-size:7px}.section-masthead{align-items:flex-start}.section-masthead .btn{margin-top:6px}}
 @media(max-width:540px){.field-hero{min-height:335px;align-items:flex-end;padding:23px 19px;margin-bottom:18px;background-position:56% center}.field-hero:before{background:linear-gradient(90deg,rgba(6,9,7,.93),rgba(6,9,7,.45)),linear-gradient(0deg,rgba(6,9,7,.82),transparent 82%)}.field-hero-copy{max-width:100%;transform:translateZ(35px)}.field-hero-copy h1{font-size:54px}.field-hero-copy>p:not(.eyebrow){max-width:290px;font-size:11px}.field-hero-player{right:-6%;width:68%;opacity:.32;mask-image:linear-gradient(90deg,transparent,black 42%)}.field-hero-index{font-size:6px;letter-spacing:.11em}.section-masthead{gap:8px;padding-bottom:15px}.section-masthead h2{font-size:38px}.section-masthead .muted{max-width:225px;line-height:1.6}.section-masthead .btn{min-height:39px;padding:9px 12px;font-size:12px}}
+
+/* Light mode is a deliberate chalk/concrete interpretation of the same Night Match identity. */
+[data-theme="light"]{--green:#78852D;--amber:#B95737;--red:#BA3F35;--black:#EEECE4;--surface:#F5F3EC;--card:#FBFAF5;--elevated:#E7E5DA;--muted:#777B6D;--sub:#565D50;--text:#191D16;--line:rgba(23,28,19,.105);--line-strong:rgba(23,28,19,.19);--silver:#50574A;--silver-dim:#858B7D;color-scheme:light}
+[data-theme="light"] body{background:var(--black);color:var(--text)}
+[data-theme="light"] .topbar,[data-theme="light"] .bottom-nav{background:rgba(238,236,228,.93);border-color:var(--line);backdrop-filter:blur(22px)}
+[data-theme="light"] .topbar .brand{color:#20251A}
+[data-theme="light"] .nav-tab{color:#747B6A}
+[data-theme="light"] .nav-tab.active{color:#657125;background:rgba(120,133,45,.1);border-color:rgba(120,133,45,.2);box-shadow:inset 3px 0 0 #78852D}
+[data-theme="light"] .card,[data-theme="light"] .post-card,[data-theme="light"] .group-card,[data-theme="light"] .composer-row{background:var(--card);border-color:var(--line);box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 12px 30px rgba(36,38,26,.065)}
+[data-theme="light"] input,[data-theme="light"] textarea,[data-theme="light"] select{background:#F5F3EC;color:#1C2118;border-color:var(--line-strong)}
+[data-theme="light"] .view h1,[data-theme="light"] .view h2,[data-theme="light"] .view h3,[data-theme="light"] .section-label{color:var(--text)}
+[data-theme="light"] .group-name-row{color:#191D16!important}
+[data-theme="light"] .reaction-pill,[data-theme="light"] .reaction-add{background:#EEECE4!important;color:#50574A!important}
+[data-theme="light"] .auth-card{background:var(--card)}
+[data-theme="light"] .auth-word{color:var(--text)}
+[data-theme="light"] .auth-card label{color:#50574A}
+[data-theme="light"] .auth-card input,[data-theme="light"] .auth-card select{background:#F4F1E8;color:#191D16}
+[data-theme="light"] .auth-card .sub{color:#686F60!important}
+[data-theme="light"] .cinema-intro{color:#F2EDE0}
