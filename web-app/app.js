@@ -331,6 +331,19 @@ RENDERERS.feed = async (el) => {
     }
   }
   el.innerHTML = `
+    <section class="field-hero" aria-label="FUSKAMO football talent network">
+      <div class="field-hero-copy">
+        <p class="eyebrow">THE GLOBAL FOOTBALL NETWORK</p>
+        <h1>MAKE YOUR<br>GAME <span>MATTER.</span></h1>
+        <p>Find your next opportunity. Put your football journey in front of the people who can move it forward.</p>
+        <div class="field-hero-actions">
+          <button type="button" class="btn" onclick="go('/discover')">Discover talent</button>
+          <button type="button" class="btn secondary" onclick="go('/reels')">Watch reels</button>
+        </div>
+      </div>
+      <div class="field-hero-player" aria-hidden="true"></div>
+      <div class="field-hero-index">FUSKAMO / 001 — BUILT FOR THE GAME</div>
+    </section>
     <div class="composer-row">
       ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
       <div style="flex:1">
@@ -716,9 +729,12 @@ RENDERERS.groups = async (el) => {
   const discover = (pub || []).filter((g) => !mine.find((m) => m.id === g.id));
   const allGroups = [...mine, ...discover];
   const { byGroup = {}, profiles = {} } = await fetchHostsForGroups(allGroups.map((g) => g.id));
-  el.innerHTML = `<div class="row between" style="margin-bottom:14px"><h2>Groups</h2><button class="btn btn-sm" onclick="go('/create-group')">+ New</button></div>
-    ${mine.length ? `<h3 style="margin-bottom:8px">Joined</h3>${mine.map((g) => groupCard(g, byGroup[g.id], profiles)).join('')}<div class="divider"></div>` : ''}
-    <h3 style="margin-bottom:8px">Discover</h3>
+  el.innerHTML = `<header class="section-masthead">
+      <div><p class="eyebrow">FUSKAMO / COMMUNITY</p><h2>Find your people.</h2><p class="muted">Build a squad, share knowledge and keep the game moving.</p></div>
+      <button class="btn btn-sm" onclick="go('/create-group')">Create group</button>
+    </header>
+    ${mine.length ? `<h3 class="section-label">Your groups</h3>${mine.map((g) => groupCard(g, byGroup[g.id], profiles)).join('')}<div class="divider"></div>` : ''}
+    <h3 class="section-label">Explore communities</h3>
     ${discover.map((g) => groupCard(g, byGroup[g.id], profiles)).join('') || emptyHtml('No public groups yet', 'Start one!')}`;
 };
 function groupCard(g, hostIds, profiles) {
