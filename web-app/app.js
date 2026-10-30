@@ -323,26 +323,6 @@ RENDERERS.feed = async (el) => {
   const { data: posts } = await postQuery;
   const profiles = await fetchProfilesMap((posts || []).map((p) => p.author_id));
   const liked = await myLikedSet('social_post_likes', 'post_id', (posts || []).map((p) => p.id));
-  let mediaStrip = '';
-  if (CURRENT_USER) {
-    const { data: follows } = await sb.from('profile_follows').select('followed_id').eq('follower_id', CURRENT_USER.id);
-    const followedIds = (follows || []).map((f) => f.followed_id);
-    const { data: myLikedRows } = await sb.from('social_post_likes').select('post_id').eq('user_id', CURRENT_USER.id).limit(20);
-    const likedPostIds = (myLikedRows || []).map((r) => r.post_id);
-    let mediaPosts = [];
-    if (followedIds.length) { const { data } = await sb.from('social_posts').select('id,media_url,media_type,author_id').in('author_id', followedIds).not('media_url', 'is', null).order('created_at', { ascending: false }).limit(10); mediaPosts = mediaPosts.concat(data || []); }
-    if (likedPostIds.length) { const { data } = await sb.from('social_posts').select('id,media_url,media_type,author_id').in('id', likedPostIds).not('media_url', 'is', null).limit(10); mediaPosts = mediaPosts.concat(data || []); }
-    const seen = new Set();
-    mediaPosts = mediaPosts.filter((m) => !seen.has(m.id) && seen.add(m.id));
-    if (mediaPosts.length) {
-      mediaStrip = `<div style="margin-bottom:16px"><p class="muted" style="margin-bottom:8px;padding:0 2px">From people you follow</p>
-        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
-          ${mediaPosts.map((m) => `<div style="flex-shrink:0;width:96px;height:96px;border-radius:var(--r-sm);overflow:hidden;cursor:pointer;background:var(--card)" onclick="go('/post/${m.id}')">
-            ${m.media_type === 'external_video' ? `<video src="${escapeHtml(m.media_url)}" style="width:100%;height:100%;object-fit:cover"></video>` : `<img src="${escapeHtml(m.media_url)}" style="width:100%;height:100%;object-fit:cover">`}
-          </div>`).join('')}
-        </div></div>`;
-    }
-  }
   const { data: storyRows } = await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').eq('status','published').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}).limit(100);
   const stories = storyRows || [];
   const storyProfiles = await fetchProfilesMap(stories.map((s) => s.author_id));
@@ -376,7 +356,6 @@ RENDERERS.feed = async (el) => {
         </div>
       </div>
     </div>
-    ${mediaStrip}
     <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>`;
   initFeedVideoAutoplay();
 };
