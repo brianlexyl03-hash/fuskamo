@@ -1062,10 +1062,29 @@ window.openInboxFilters = () => {
 };
 RENDERERS.conversation = async (el, id) => {
   if (!requireAuth()) return;
+  const { data: participants } = await sb.from('direct_conversation_participants').select('user_id').eq('conversation_id', id).neq('user_id', CURRENT_USER.id);
+  const otherId = participants?.[0]?.user_id;
+  const profiles = otherId ? await fetchProfilesMap([otherId]) : {};
+  const other = profiles[otherId] || {};
   const { data: messages } = await sb.from('direct_messages').select('*').eq('conversation_id', id).is('deleted_at', null).order('created_at', { ascending: true }).limit(100);
   await sb.from('direct_conversation_participants').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', id).eq('user_id', CURRENT_USER.id);
-  el.innerHTML = `<div id="conv-thread">${(messages || []).map((m) => `<div class="card" style="${m.sender_id === CURRENT_USER.id ? 'border-color:var(--green)' : ''}"><p>${escapeHtml(m.body)}</p><span class="muted">${timeAgo(m.created_at)} ago</span></div>`).join('') || emptyHtml('Say hello', '')}</div>
-    <div class="card" style="position:sticky;bottom:76px"><textarea id="dm-input" rows="2" placeholder="Message..."></textarea><button class="btn btn-sm" onclick="sendDirectMessage('${id}')">Send</button></div>`;
+  const messageRows = (messages || []).map((m) => `<article class="dm-bubble-row ${m.sender_id === CURRENT_USER.id ? 'mine' : 'theirs'}"><div class="dm-bubble"><p>${escapeHtml(m.body || '')}</p><time>${escapeHtml(timeAgo(m.created_at))} ago</time></div></article>`).join('');
+  el.innerHTML = `
+    <section class="dm-thread-shell">
+      <header class="dm-thread-header"><button class="dm-back" onclick="go('/messages')" aria-label="Back to messages">‹</button><span class="dm-thread-avatar">${avatarHtml(other.avatar_url, other.display_name, 'md')}</span><span class="dm-thread-person"><strong>${escapeHtml(other.display_name || 'FUSKAMO Member')}</strong><small>${escapeHtml(other.role || 'Community member')}</small></span><button class="dm-thread-more" aria-label="Conversation options" onclick="openConversationOptions('${id}')">•••</button></header>
+      <div class="dm-thread-profile"><span class="dm-thread-large-avatar">${avatarHtml(other.avatar_url, other.display_name, 'lg')}</span><strong>${escapeHtml(other.display_name || 'FUSKAMO Member')}</strong><small>@${escapeHtml(other.username || 'member')} · FUSKAMO</small><button onclick="go('/public-profile/${otherId || ''}')" class="dm-view-profile">View profile</button></div>
+      <div id="conv-thread" class="dm-thread-messages">${messageRows || '<div class="dm-thread-empty"><span>↗</span><strong>This is the beginning</strong><p>Send a message to start the conversation.</p></div>'}</div>
+      <form class="dm-composer" onsubmit="event.preventDefault();sendDirectMessage('${id}')"><textarea id="dm-input" rows="1" maxlength="4000" placeholder="Message..." aria-label="Write a message" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea><button class="dm-send" type="submit" aria-label="Send message">➤</button></form>
+    </section>`;
+  const thread = document.getElementById('conv-thread');
+  if (thread) thread.scrollTop = thread.scrollHeight;
+};
+window.openConversationOptions = (id) => {
+  const overlay = document.createElement('div');
+  overlay.className = 'dm-sheet-overlay';
+  overlay.innerHTML = `<section class="dm-filter-sheet" role="dialog" aria-modal="true" aria-label="Conversation options"><div class="dm-sheet-grabber"></div><div class="dm-sheet-title"><h2>Conversation options</h2><button aria-label="Close" onclick="this.closest('.dm-sheet-overlay').remove()">×</button></div><button class="dm-filter-choice" onclick="this.closest('.dm-sheet-overlay').remove();go('/messages')"><span><b>Back to inbox</b><small>Return to all conversations</small></span><span>›</span></button><button class="dm-filter-choice" onclick="this.closest('.dm-sheet-overlay').remove();go('/my-reports')"><span><b>Safety and support</b><small>Review or manage reports</small></span><span>›</span></button><button class="btn dm-sheet-done" onclick="this.closest('.dm-sheet-overlay').remove()">Done</button></section>`;
+  overlay.addEventListener('click', (event) => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 };
 async function sendDirectMessage(convId) {
   const body = document.getElementById('dm-input').value.trim();
