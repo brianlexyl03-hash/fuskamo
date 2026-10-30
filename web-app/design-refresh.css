@@ -62,3 +62,8 @@ input,textarea,select{width:100%;padding:13px 14px;background:#0E120F;border:1px
 .achievement-mark{display:grid;place-items:center;width:34px;height:38px;flex:0 0 34px;color:var(--green);border:1px solid rgba(198,214,74,.23);background:rgba(198,214,74,.06);border-radius:4px}.achievement-mark svg{width:21px;height:21px}
 [data-theme="light"] .reaction-pill,[data-theme="light"] .reaction-add{background:#F0EEE5!important;color:#525949!important;border-color:var(--line)!important}
 [data-theme="light"] .reaction-pill.mine{background:rgba(120,133,45,.1)!important;color:#657125!important}
+
+/* Status marks are typographic labels, not emoji or decorative glyphs. */
+.verified-mark{display:inline-flex;align-items:center;vertical-align:middle;margin:0 5px 0 0;padding:4px 7px;border:1px solid rgba(198,214,74,.28);border-radius:2px;background:rgba(198,214,74,.08);color:var(--green);font-size:8px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.emoji-picker{display:none!important}
+[data-theme="light"] .verified-mark{color:#66732A;border-color:rgba(120,133,45,.28);background:rgba(120,133,45,.08)}
