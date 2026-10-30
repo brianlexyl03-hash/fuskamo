@@ -987,58 +987,126 @@ async function reviewMessageRequest(id, status, senderId) {
 }
 
 // ---------- REELS ----------
-RENDERERS.reels = async (el) => {
-  const { data: reels } = await sb.from('social_reels').select('*').eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(20);
-  const profiles = await fetchProfilesMap((reels || []).map((r) => r.author_id));
-  const liked = await myLikedSet('social_reel_likes', 'reel_id', (reels || []).map((r) => r.id));
-  if (!(reels || []).length) {
-    el.innerHTML = `<div class="reels-empty-upload">${emptyHtml('No reels yet', 'Be the first to upload one.')}
-      <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()"></div>`;
-    return;
-  }
-  el.innerHTML = `<div class="reels-scroll" id="reels-scroll">
-    ${(reels || []).map((r, i) => `<div class="reel-slide" data-index="${i}">
-      <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} loop muted playsinline onclick="toggleReelMute(this)"></video>
-      <div class="mute-hint" id="mute-hint-${i}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg></div>
-      <div class="reel-overlay">
-        <div class="meta">${authorLine(profiles[r.author_id], r.created_at)}<p style="margin:4px 0">${escapeHtml(r.caption)}</p></div>
-        <div class="reel-actions">
-          <span class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}">${HEART_SVG(liked.has(r.id))}<span class="cnt">${r.like_count}</span></span>
-          <label for="reel-file" class="engage-btn" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></label>
-        </div>
-      </div>
-    </div>`).join('')}
-  </div>
-  <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">`;
-  initReelsAutoplay();
+let REELS_FEED_MODE = 'recommended';
+let REELS_DATA = [];
+let REELS_VIEW_STARTS = new Map();
+const REEL_ICON = {
+  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-1-4v-3.5A7.5 7.5 0 0 1 11.5 4h1A7.5 7.5 0 0 1 20 11.5Z"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
+  save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-4-6 4Z"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>'
 };
+RENDERERS.reels = async (el) => {
+  el.innerHTML = `<div class="reels-head"><div><p class="eyebrow">FUSKAMO / WATCH</p><h2>Reels</h2><p class="muted">Short clips from the football community.</p></div><label class="btn reels-upload" for="reel-file">Post a reel</label></div>
+    <div class="reels-feed-tabs" role="tablist" aria-label="Reel feed">
+      <button type="button" role="tab" aria-selected="${REELS_FEED_MODE === 'recommended'}" class="${REELS_FEED_MODE === 'recommended' ? 'active' : ''}" onclick="setReelsFeed('recommended')">For you</button>
+      <button type="button" role="tab" aria-selected="${REELS_FEED_MODE === 'latest'}" class="${REELS_FEED_MODE === 'latest' ? 'active' : ''}" onclick="setReelsFeed('latest')">Latest</button>
+    </div>
+    <p class="reels-ranking-note">${REELS_FEED_MODE === 'recommended' ? 'Recommended from recent activity, meaningful engagement and watch completion. Recommendations may vary as people interact.' : 'Newest public reels first.'}</p>
+    <div id="reels-feed-content" class="reels-loading"><div class="spinner"></div><p>Loading reels…</p></div>
+    <input type="file" id="reel-file" accept="video/*" style="display:none" onchange="uploadNewReel()">`;
+  await loadReelsInto(el.querySelector('#reels-feed-content'));
+};
+async function setReelsFeed(mode) {
+  REELS_FEED_MODE = mode;
+  const el = document.getElementById('view-reels');
+  if (!el) return;
+  const tabs = el.querySelectorAll('.reels-feed-tabs button');
+  tabs.forEach((b) => { const active = (mode === 'recommended' ? b.textContent.trim() === 'For you' : b.textContent.trim() === 'Latest'); b.classList.toggle('active', active); b.setAttribute('aria-selected', String(active)); });
+  const note = el.querySelector('.reels-ranking-note');
+  if (note) note.textContent = mode === 'recommended' ? 'Recommended from recent activity, meaningful engagement and watch completion. Recommendations may vary as people interact.' : 'Newest public reels first.';
+  const content = el.querySelector('#reels-feed-content');
+  if (content) { content.innerHTML = '<div class="reels-loading"><div class="spinner"></div><p>Loading reels…</p></div>'; await loadReelsInto(content); }
+}
+async function loadReelsInto(content) {
+  let reels = [];
+  if (REELS_FEED_MODE === 'recommended') {
+    const { data, error } = await sb.rpc('get_social_reels', { p_limit: 30 });
+    if (!error) reels = data || [];
+    else console.warn('Recommended reels RPC unavailable; showing newest public reels.', error.message);
+  }
+  if (REELS_FEED_MODE === 'latest' || !reels.length) {
+    const { data, error } = await sb.from('social_reels').select('*').eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(30);
+    if (error) { content.innerHTML = emptyHtml('Reels could not load', 'Check your connection and try again.'); return; }
+    reels = data || [];
+  }
+  REELS_DATA = reels;
+  const profiles = await fetchProfilesMap(reels.map((r) => r.author_id));
+  const liked = await myLikedSet('social_reel_likes', 'reel_id', reels.map((r) => r.id));
+  if (!reels.length) { content.innerHTML = `<div class="reels-empty-upload">${emptyHtml('No reels yet', 'Be the first to upload a clip from your football life.')}</div>`; return; }
+  content.innerHTML = `<div class="reels-scroll" id="reels-scroll">
+    ${reels.map((r, i) => {
+      const author = profiles[r.author_id] || {};
+      const name = escapeHtml(author.display_name || author.username || 'FUSKAMO member');
+      const handle = author.username ? '@' + escapeHtml(author.username) : '';
+      const created = r.created_at ? timeAgo(r.created_at) : '';
+      return `<article class="reel-slide" data-index="${i}" data-reel-id="${escapeHtml(r.id)}">
+        <video src="${escapeHtml(r.video_url)}" ${r.thumbnail_url ? `poster="${escapeHtml(r.thumbnail_url)}"` : ''} loop muted playsinline preload="${i === 0 ? 'auto' : 'metadata'}" aria-label="Reel by ${name}" onclick="toggleReelMute(this)"></video>
+        <div class="reel-top-controls"><span class="reel-sound-label">Tap video for sound</span><button class="reel-more" type="button" onclick="openReelFeedback('${r.id}')" aria-label="More reel options">${REEL_ICON.more}</button></div>
+        <div class="mute-hint" id="mute-hint-${i}">Sound ${'off'}</div>
+        <div class="reel-overlay">
+          <div class="meta">
+            <div class="reel-author">${avatarHtml(author.avatar_url, author.display_name || author.username || 'Member', 'sm')}<div><strong>${name}</strong><small>${handle ? handle + (created ? ' · ' : '') : ''}${escapeHtml(created)}</small></div></div>
+            <p>${escapeHtml(r.caption || '')}</p>
+          </div>
+          <div class="reel-actions">
+            <button type="button" class="engage-btn ${liked.has(r.id) ? 'liked' : ''}" onclick="toggleReelLike('${r.id}', this)" data-liked="${liked.has(r.id)}" aria-label="${liked.has(r.id) ? 'Unlike reel' : 'Like reel'}">${HEART_SVG(liked.has(r.id))}<span class="cnt">${Number(r.like_count || 0)}</span></button>
+            <button type="button" class="engage-btn" onclick="openReelComments('${r.id}')" aria-label="Open comments">${REEL_ICON.comment}<span class="cnt">${Number(r.comment_count || 0)}</span></button>
+            <button type="button" class="engage-btn" onclick="shareReel('${r.id}')" aria-label="Share reel">${REEL_ICON.share}<span class="cnt">Share</span></button>
+            <button type="button" class="engage-btn" onclick="saveReel('${r.id}', this)" aria-label="Save reel">${REEL_ICON.save}<span class="cnt">Save</span></button>
+          </div>
+        </div>
+      </article>`;
+    }).join('')}
+  </div>`;
+  initReelsAutoplay();
+}
 function initReelsAutoplay() {
-  const slides = document.querySelectorAll('.reel-slide video');
+  const videos = [...document.querySelectorAll('#reels-scroll .reel-slide video')];
+  if (!videos.length) return;
+  if (!('IntersectionObserver' in window)) { videos[0].play().catch(() => {}); return; }
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       const video = entry.target;
-      if (entry.isIntersecting && entry.intersectionRatio > 0.6) video.play().catch(() => {});
-      else video.pause();
+      const slide = video.closest('.reel-slide');
+      const reelId = slide?.dataset.reelId;
+      if (entry.isIntersecting && entry.intersectionRatio > .65) {
+        video.play().catch(() => {});
+        if (reelId && !REELS_VIEW_STARTS.has(reelId)) REELS_VIEW_STARTS.set(reelId, { started: Date.now(), completed: false, rewatch: 0 });
+      } else {
+        video.pause();
+        if (reelId && REELS_VIEW_STARTS.has(reelId)) {
+          const view = REELS_VIEW_STARTS.get(reelId);
+          const watchMs = Math.max(0, Date.now() - view.started);
+          if (watchMs > 900) sb.rpc('record_reel_view', { p_reel: reelId, p_session: reelSessionId(), p_watch_ms: watchMs, p_completed: watchMs >= (video.duration || Infinity) * 800, p_rewatch: view.rewatch || 0 }).then(() => {}).catch(() => {});
+          REELS_VIEW_STARTS.delete(reelId);
+        }
+      }
     });
-  }, { threshold: [0, 0.6, 1] });
-  slides.forEach((v) => observer.observe(v));
-  if (slides[0]) slides[0].play().catch(() => {});
+  }, { threshold: [0, .25, .65, 1] });
+  videos.forEach((v) => observer.observe(v));
+  videos[0].play().catch(() => {});
+}
+function reelSessionId() {
+  if (!window.__fuskamoReelSession) window.__fuskamoReelSession = (window.crypto?.randomUUID ? crypto.randomUUID() : 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  return window.__fuskamoReelSession;
 }
 function toggleReelMute(video) {
   video.muted = !video.muted;
-  const idx = video.closest('.reel-slide').dataset.index;
-  const hint = document.getElementById('mute-hint-' + idx);
-  hint.innerHTML = video.muted
-    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 9l4 6m0-6l-4 6" stroke="#fff" stroke-width="2"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg>`;
-  hint.classList.add('show');
-  setTimeout(() => hint.classList.remove('show'), 900);
+  const slide = video.closest('.reel-slide');
+  const hint = slide?.querySelector('.mute-hint');
+  if (hint) { hint.textContent = video.muted ? 'Sound off' : 'Sound on'; hint.classList.add('show'); setTimeout(() => hint.classList.remove('show'), 850); }
+  const label = slide?.querySelector('.reel-sound-label');
+  if (label) label.textContent = video.muted ? 'Tap video for sound' : 'Sound on';
 }
 async function uploadNewReel() {
-  if (!requireAuth()) { document.getElementById('reel-file').value = ''; return; }
-  const file = document.getElementById('reel-file').files[0];
+  const input = document.getElementById('reel-file');
+  if (!requireAuth()) { if (input) input.value = ''; return; }
+  const file = input?.files?.[0];
   if (!file) return;
-  toast('Uploading reel...');
+  if (!file.type.startsWith('video/')) { toast('Choose a video file.'); input.value = ''; return; }
+  if (file.size > 150 * 1024 * 1024) { toast('Video must be under 150 MB.'); input.value = ''; return; }
+  toast('Uploading reel…');
   try {
     const videoUrl = await uploadToStorage('reel-media', file);
     const caption = prompt('Add a caption (optional):', '') || '';
@@ -1047,18 +1115,123 @@ async function uploadNewReel() {
     toast('Reel posted');
     router();
   } catch (e) { toast(e.message || 'Upload failed'); }
+  finally { if (input) input.value = ''; }
 }
-async function toggleReelLike(reelId, span) {
+async function toggleReelLike(reelId, button) {
   if (!requireAuth()) return;
-  const liked = span.dataset.liked === 'true';
-  if (liked) await sb.from('social_reel_likes').delete().eq('reel_id', reelId).eq('user_id', CURRENT_USER.id);
-  else await sb.from('social_reel_likes').insert({ reel_id: reelId, user_id: CURRENT_USER.id });
-  const cnt = span.querySelector('.cnt');
-  cnt.textContent = parseInt(cnt.textContent) + (liked ? -1 : 1);
-  span.dataset.liked = (!liked).toString();
-  span.classList.toggle('liked', !liked);
+  if (button.dataset.busy === 'true') return;
+  button.dataset.busy = 'true'; button.disabled = true;
+  const wasLiked = button.dataset.liked === 'true';
+  const nextLiked = !wasLiked;
+  const count = button.querySelector('.cnt');
+  const previousCount = Number(count?.textContent || 0);
+  button.dataset.liked = String(nextLiked);
+  button.classList.toggle('liked', nextLiked);
+  button.setAttribute('aria-label', nextLiked ? 'Unlike reel' : 'Like reel');
+  if (count) count.textContent = String(Math.max(0, previousCount + (nextLiked ? 1 : -1)));
+  try {
+    const { data, error } = await sb.rpc('toggle_reel_like', { p_reel: reelId });
+    if (error) throw error;
+    if (typeof data === 'boolean' && data !== nextLiked) {
+      button.dataset.liked = String(data); button.classList.toggle('liked', data);
+      if (count) count.textContent = String(Math.max(0, previousCount + (data ? 1 : -1)));
+    }
+  } catch (e) {
+    button.dataset.liked = String(wasLiked); button.classList.toggle('liked', wasLiked);
+    if (count) count.textContent = String(previousCount);
+    toast(e.message || 'Could not update like');
+  } finally { button.disabled = false; button.dataset.busy = 'false'; }
 }
-
+async function openReelComments(reelId) {
+  const { data: rows, error } = await sb.from('social_reel_comments').select('*').eq('reel_id', reelId).eq('status', 'published').order('created_at', { ascending: true }).limit(200);
+  if (error) { toast('Comments are unavailable right now.'); return; }
+  const profiles = await fetchProfilesMap((rows || []).map((c) => c.author_id));
+  const roots = (rows || []).filter((c) => !c.parent_id);
+  const replies = (id) => (rows || []).filter((c) => c.parent_id === id);
+  const renderComment = (c, nested = false) => {
+    const p = profiles[c.author_id] || {};
+    const display = escapeHtml(p.display_name || p.username || 'Member');
+    return `<div class="reel-comment ${nested ? 'reply' : ''}"><div class="reel-comment-avatar">${avatarHtml(p.avatar_url, p.display_name || p.username || 'Member', 'sm')}</div><div class="reel-comment-body"><div class="reel-comment-meta"><strong>${display}</strong><small>${escapeHtml(timeAgo(c.created_at))}</small></div><p>${escapeHtml(c.body)}</p>${!nested ? `<button type="button" class="text-action" onclick="toggleReelReplyBox('${c.id}')">Reply</button><div class="reel-reply-box" id="reply-box-${c.id}" hidden><input id="reply-input-${c.id}" maxlength="2000" placeholder="Write a reply" aria-label="Reply to ${display}"><button class="btn" type="button" onclick="submitReelComment('${reelId}','reply-input-${c.id}','${c.id}')">Reply</button></div>${replies(c.id).map((reply) => renderComment(reply, true)).join('')}` : ''}</div></div>`;
+  };
+  const overlay = document.createElement('div'); overlay.className = 'reel-dialog-backdrop'; overlay.id = 'reel-comments-backdrop';
+  overlay.innerHTML = `<section class="reel-comments-sheet" role="dialog" aria-modal="true" aria-labelledby="reel-comments-title"><div class="sheet-grabber"></div><div class="row between"><div><h3 id="reel-comments-title">Comments</h3><p class="muted">${(rows || []).length} comments · keep it respectful</p></div><button class="icon-btn" type="button" onclick="closeReelDialog()" aria-label="Close comments">Close</button></div><div class="reel-comments-list">${roots.map((c) => renderComment(c)).join('') || '<p class="muted" style="padding:16px 0">No comments yet. Start the conversation.</p>'}</div><form class="reel-comment-composer" onsubmit="event.preventDefault();submitReelComment('${reelId}','reel-comment-input')"><input id="reel-comment-input" maxlength="2000" placeholder="${CURRENT_USER ? 'Add a comment…' : 'Sign in to comment'}" aria-label="Add a comment" ${CURRENT_USER ? '' : 'disabled'}><button class="btn" type="submit" ${CURRENT_USER ? '' : 'disabled'}>Post</button></form></section>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeReelDialog(); });
+  document.addEventListener('keydown', reelDialogEscape);
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.querySelector('#reel-comment-input')?.focus(), 80);
+}
+function reelDialogEscape(e) { if (e.key === 'Escape') closeReelDialog(); }
+function closeReelDialog() { document.getElementById('reel-comments-backdrop')?.remove(); document.getElementById('reel-feedback-backdrop')?.remove(); document.removeEventListener('keydown', reelDialogEscape); }
+function toggleReelReplyBox(id) { const box = document.getElementById('reply-box-' + id); if (box) box.hidden = !box.hidden; }
+async function submitReelComment(reelId, inputId, parentId = null) {
+  if (!requireAuth()) return;
+  const input = document.getElementById(inputId); const body = input?.value?.trim();
+  if (!body) { input?.focus(); return; }
+  if (body.length > 2000) { toast('Comments must be 2,000 characters or fewer.'); return; }
+  const submit = input.closest('form')?.querySelector('button[type="submit"]') || input.parentElement?.querySelector('button');
+  if (submit) { submit.disabled = true; submit.dataset.oldText = submit.textContent; submit.textContent = 'Posting…'; }
+  try {
+    const { error } = await sb.from('social_reel_comments').insert({ reel_id: reelId, author_id: CURRENT_USER.id, parent_id: parentId, body });
+    if (error) throw error;
+    const { error: countError } = await sb.rpc('refresh_social_reel_counts', { p_reel: reelId });
+    if (countError) console.warn('Comment posted; count refresh will catch up.', countError.message);
+    toast('Comment posted');
+    closeReelDialog();
+    const active = document.querySelector(`.reel-slide[data-reel-id="${CSS.escape(reelId)}"] .reel-actions .engage-btn:nth-child(2) .cnt`);
+    if (active) active.textContent = String(Number(active.textContent || 0) + 1);
+    await openReelComments(reelId);
+  } catch (e) { toast(e.message || 'Could not post comment'); }
+  finally { if (submit) { submit.disabled = false; submit.textContent = submit.dataset.oldText || 'Post'; } }
+}
+async function saveReel(reelId, button) {
+  if (!requireAuth()) return;
+  button.disabled = true;
+  try {
+    const { data, error } = await sb.rpc('toggle_reel_save', { p_reel: reelId });
+    if (error) throw error;
+    const saved = Boolean(data);
+    button.classList.toggle('saved', saved);
+    const cnt = button.querySelector('.cnt'); if (cnt) cnt.textContent = saved ? 'Saved' : 'Save';
+    button.setAttribute('aria-label', saved ? 'Unsave reel' : 'Save reel');
+    toast(saved ? 'Saved to your collection' : 'Removed from saved reels');
+  } catch (e) { toast(e.message || 'Save is unavailable'); }
+  finally { button.disabled = false; }
+}
+async function shareReel(reelId) {
+  const reel = REELS_DATA.find((r) => r.id === reelId);
+  const url = reel ? new URL(window.location.href) : new URL(window.location.href);
+  url.searchParams.set('reel', reelId);
+  try {
+    if (navigator.share) await navigator.share({ title: 'FUSKAMO reel', text: reel?.caption || 'Watch this reel on FUSKAMO', url: url.toString() });
+    else if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url.toString()); toast('Reel link copied'); }
+    else { window.prompt('Copy this reel link', url.toString()); }
+    if (CURRENT_USER) { const { error } = await sb.rpc('record_reel_share', { p_reel: reelId, p_channel: 'share_sheet' }); if (error) console.warn('Share could not be recorded', error.message); }
+  } catch (e) { if (e.name !== 'AbortError') toast('Could not share reel'); }
+}
+function openReelFeedback(reelId) {
+  closeReelDialog();
+  const overlay = document.createElement('div'); overlay.className = 'reel-dialog-backdrop'; overlay.id = 'reel-feedback-backdrop';
+  overlay.innerHTML = `<section class="reel-feedback-sheet" role="dialog" aria-modal="true" aria-label="Reel preferences"><div class="row between"><div><h3>Reel preferences</h3><p class="muted">Help shape what appears in your feed.</p></div><button type="button" class="icon-btn" onclick="closeReelDialog()">Close</button></div><button class="reel-feedback-option" onclick="sendReelFeedback('${reelId}','not_interested')"><strong>Not interested</strong><span>Show fewer reels like this.</span></button><button class="reel-feedback-option" onclick="sendReelFeedback('${reelId}','interested')"><strong>Show me more like this</strong><span>Help improve your recommendations.</span></button><button class="reel-feedback-option" onclick="sendReelFeedback('${reelId}','report')"><strong>Report this reel</strong><span>Flag content that may violate community rules.</span></button></section>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeReelDialog(); }); document.addEventListener('keydown', reelDialogEscape); document.body.appendChild(overlay);
+}
+async function sendReelFeedback(reelId, feedback) {
+  if (!requireAuth()) return;
+  try {
+    if (feedback === 'report') {
+      const reason = window.prompt('Briefly describe the issue (spam, abuse, harmful content, or other):');
+      if (!reason?.trim()) return;
+      const { error } = await sb.from('content_reports').insert({ reporter_id: CURRENT_USER.id, content_type: 'reel', content_id: reelId, reason: reason.trim().slice(0, 500) });
+      if (error) throw error;
+      toast('Report submitted for review');
+    } else {
+      const { error } = await sb.from('social_reel_feedback').upsert({ reel_id: reelId, user_id: CURRENT_USER.id, feedback });
+      if (error) throw error;
+      toast(feedback === 'not_interested' ? 'We’ll try to show you fewer reels like this' : 'Thanks — recommendations updated');
+    }
+    closeReelDialog();
+    if (feedback === 'not_interested') { const slide = document.querySelector(`.reel-slide[data-reel-id="${CSS.escape(reelId)}"]`); slide?.remove(); }
+  } catch (e) { toast(e.message || 'Could not save this preference'); }
+}
 // ---------- SCOREBOARD ----------
 RENDERERS.scoreboard = async (el) => {
   const { data: season } = await sb.from('scoreboard_seasons').select('*').eq('active', true).maybeSingle();
