@@ -66,7 +66,7 @@ const ROUTES = [
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
   'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post', 'join',
 ];
-const NAV_TABS = { feed: 'feed', discover: 'discover', groups: 'groups', scouts: 'scouts', profile: 'profile' };
+const NAV_TABS = { feed: 'feed', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
 
 function parseHash() {
   const raw = (location.hash || '#/feed').slice(2); // strip '#/'
@@ -78,6 +78,7 @@ function go(path) { location.hash = '#' + path; }
 
 async function router() {
   if (!CURRENT_USER) { showAuthGate(); return; }
+  document.body.classList.remove('auth-mode');
   const { path, param } = parseHash();
   const viewId = 'view-' + path;
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
@@ -117,6 +118,7 @@ window.addEventListener('hashchange', router);
 
 // ---------- Auth ----------
 function showAuthGate() {
+  document.body.classList.add('auth-mode');
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
   const authView = document.getElementById('view-auth');
   authView.classList.add('active');
@@ -306,8 +308,19 @@ function playerCard(pl) {
 }
 
 // ---------- FEED ----------
+let SOCIAL_FEED_MODE = 'for-you';
 RENDERERS.feed = async (el) => {
-  const { data: posts } = await sb.from('social_posts').select('*').eq('visibility', 'public').eq('status', 'published').is('reply_to_id', null).order('created_at', { ascending: false }).limit(30);
+  let followedIds = [];
+  if (SOCIAL_FEED_MODE === 'following' && CURRENT_USER) {
+    const { data: follows } = await sb.from('profile_follows').select('followed_id').eq('follower_id', CURRENT_USER.id);
+    followedIds = (follows || []).map((f) => f.followed_id);
+  }
+  let postQuery = sb.from('social_posts').select('*').eq('status', 'published').is('reply_to_id', null).order('created_at', { ascending: false }).limit(30);
+  if (SOCIAL_FEED_MODE === 'following') {
+    if (followedIds.length) postQuery = postQuery.in('author_id', followedIds);
+    else postQuery = postQuery.eq('author_id', CURRENT_USER?.id || '00000000-0000-0000-0000-000000000000');
+  } else postQuery = postQuery.eq('visibility', 'public');
+  const { data: posts } = await postQuery;
   const profiles = await fetchProfilesMap((posts || []).map((p) => p.author_id));
   const liked = await myLikedSet('social_post_likes', 'post_id', (posts || []).map((p) => p.id));
   let mediaStrip = '';
@@ -330,20 +343,25 @@ RENDERERS.feed = async (el) => {
         </div></div>`;
     }
   }
+  const { data: storyRows } = await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').eq('status','published').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}).limit(100);
+  const stories = storyRows || [];
+  const storyProfiles = await fetchProfilesMap(stories.map((s) => s.author_id));
+  const seenStories = new Set();
+  if (CURRENT_USER) {
+    const { data: seen } = await sb.from('social_story_views').select('story_id').eq('viewer_id',CURRENT_USER.id).in('story_id',stories.map(s=>s.id).length?stories.map(s=>s.id):['00000000-0000-0000-0000-000000000000']);
+    (seen||[]).forEach(x=>seenStories.add(x.story_id));
+  }
+  const storyHtml = `<div class="stories-tray" aria-label="Stories">
+    <button class="story-bubble" type="button" onclick="go('/story-settings')" aria-label="Add a story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
+    ${[...new Map(stories.map(s=>[s.author_id,s])).values()].map(s=>{const p=storyProfiles[s.author_id]||{};const own= s.author_id===CURRENT_USER?.id;return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url? `<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${own?'Your story':escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
+  </div>`;
   el.innerHTML = `
-    <section class="field-hero" aria-label="FUSKAMO football talent network">
-      <div class="field-hero-copy">
-        <p class="eyebrow">THE GLOBAL FOOTBALL NETWORK</p>
-        <h1>MAKE YOUR<br>GAME <span>MATTER.</span></h1>
-        <p>Find your next opportunity. Put your football journey in front of the people who can move it forward.</p>
-        <div class="field-hero-actions">
-          <button type="button" class="btn" onclick="go('/discover')">Discover talent</button>
-          <button type="button" class="btn secondary" onclick="go('/reels')">Watch reels</button>
-        </div>
-      </div>
-      <div class="field-hero-player" aria-hidden="true"></div>
-      <div class="field-hero-index">FUSKAMO / 001 — BUILT FOR THE GAME</div>
-    </section>
+    ${storyHtml}
+    <div class="feed-tabs" role="tablist" aria-label="Feed type">
+      <button type="button" class="${SOCIAL_FEED_MODE==='for-you'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='for-you'}" onclick="setSocialFeedMode('for-you')">For you</button>
+      <button type="button" class="${SOCIAL_FEED_MODE==='following'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='following'}" onclick="setSocialFeedMode('following')">Following</button>
+    </div>
+    <div class="football-shortcuts"><button onclick="go('/discover')">Players</button><button onclick="go('/scouts')">Scouts</button><button onclick="go('/groups')">Groups</button><button onclick="go('/messages')">Messages</button></div>
     <div class="composer-row">
       ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
       <div style="flex:1">
@@ -359,7 +377,7 @@ RENDERERS.feed = async (el) => {
       </div>
     </div>
     ${mediaStrip}
-    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml('No posts yet', 'Be the first to share something.')}</div>`;
+    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>`;
   initFeedVideoAutoplay();
 };
 let composerFile = null;
@@ -422,22 +440,22 @@ function initFeedVideoAutoplay() {
   videos.forEach((v) => observer.observe(v));
 }
 function feedPostHtml(p, profile, isLiked) {
-  return `<div class="tweet-row">
-    ${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
+  return `<article class="card post-card">
+    <div class="post-header row" style="align-items:center;margin-bottom:10px">${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
     <div style="flex:1;min-width:0">
       <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
       ${p.body ? `<p style="margin:2px 0 6px;cursor:pointer;line-height:1.4" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
-      ${p.media_url ? `<div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
+      ${p.media_url ? `<div class="post-media" style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
         ${p.media_type === 'external_video' ? feedVideoHtml(p.media_url) : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
         <div class="dbl-heart">${HEART_SVG_FILLED}</div>
       </div>` : ''}
-      <div class="row" style="gap:28px;margin-top:8px">
+      <div class="row post-actions" style="gap:16px;margin-top:10px">
         <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
         <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
         <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
       </div>
     </div>
-  </div>`;
+  </article>`;
 }
 function HEART_SVG(filled) { return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`; }
 const HEART_SVG_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`;
@@ -448,7 +466,7 @@ async function dblTapLike(postId, wrapEl) {
   const heart = wrapEl.querySelector('.dbl-heart');
   heart.classList.add('pop');
   setTimeout(() => heart.classList.remove('pop'), 700);
-  const engageBtn = wrapEl.closest('.card').querySelector('.engage-btn');
+  const engageBtn = wrapEl.closest('.post-card, .card').querySelector('.engage-btn');
   if (engageBtn && engageBtn.dataset.liked !== 'true') {
     engageBtn.dataset.liked = 'true';
     engageBtn.classList.add('liked');
@@ -583,20 +601,40 @@ RENDERERS.region = async (el, country) => {
 
 // ---------- SEARCH ----------
 RENDERERS.search = async (el) => {
-  el.innerHTML = `<input id="search-input" placeholder="Search players, scouts, groups..." oninput="runSearch()" autofocus><div id="search-results"></div>`;
+  el.innerHTML = `<div class="search-page"><h2 style="margin-bottom:16px">Explore football</h2><input id="search-input" placeholder="Search players, scouts, clubs, groups..." oninput="runSearch()" autofocus aria-label="Search FUSKAMO"><div class="search-categories" role="tablist" aria-label="Search categories"><button class="active" onclick="setSearchCategory('all',this)">For you</button><button onclick="setSearchCategory('players',this)">Players</button><button onclick="setSearchCategory('scouts',this)">Scouts</button><button onclick="setSearchCategory('groups',this)">Groups</button><button onclick="setSearchCategory('posts',this)">Posts</button></div><div id="search-results"><div class="explore-grid" id="explore-grid"></div></div></div>`;
+  loadExploreGrid();
+};
+let SEARCH_CATEGORY = 'all';
+function setSearchCategory(category,button){
+  SEARCH_CATEGORY=category;
+  document.querySelectorAll('.search-categories button').forEach(b=>b.classList.toggle('active',b===button));
+  const input=document.getElementById('search-input');
+  if(input?.value.trim()) runSearch(); else loadExploreGrid();
+}
+async function loadExploreGrid(){
+  const grid=document.getElementById('explore-grid');
+  if(!grid)return;
+  if(SEARCH_CATEGORY==='players'){const {data}=await sb.from('players').select('id,name,position,country').eq('status','approved').order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(p=>`<button class="explore-tile explore-player" onclick="go('/public-profile/${p.id}')"><span>${escapeHtml(p.name)}</span><small>${escapeHtml(p.position||'Player')} · ${escapeHtml(p.country||'')}</small></button>`).join('')||emptyHtml('No players yet','Approved player profiles will appear here.');return;}
+  if(SEARCH_CATEGORY==='scouts'){const {data}=await sb.from('scouts').select('id,name,organization').eq('verified',true).order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(s=>`<button class="explore-tile explore-player" onclick="go('/scouts')"><span>${escapeHtml(s.name)}</span><small>${escapeHtml(s.organization||'Verified scout')}</small></button>`).join('')||emptyHtml('No verified scouts yet','Check back soon.');return;}
+  if(SEARCH_CATEGORY==='groups'){const {data}=await sb.from('groups').select('id,name,description').order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(g=>`<button class="explore-tile explore-player" onclick="go('/group/${g.id}')"><span>${escapeHtml(g.name)}</span><small>${escapeHtml(g.description||'Football community')}</small></button>`).join('')||emptyHtml('No groups yet','Football communities will appear here.');return;}
+  const {data}=await sb.from('social_posts').select('id,media_url,media_type,body').eq('status','published').eq('visibility','public').not('media_url','is',null).order('created_at',{ascending:false}).limit(24);
+  grid.innerHTML=(data||[]).map(p=>`<button class="explore-tile" onclick="go('/post/${p.id}')" aria-label="Open post"><img src="${escapeHtml(p.media_type==='external_video'?'':p.media_url)}" alt="" loading="lazy">${p.media_type==='external_video'?'<span class="tile-play">▶</span>':''}<span class="tile-meta">${escapeHtml((p.body||'Football post').slice(0,90))}</span></button>`).join('')||emptyHtml('Explore FUSKAMO','Posts and football moments will appear here.');
 };
 let searchTimer;
 async function runSearch() {
   clearTimeout(searchTimer);
   const q = document.getElementById('search-input').value.trim();
   const out = document.getElementById('search-results');
-  if (!q) { out.innerHTML = ''; return; }
+  if (!q) { loadExploreGrid(); return; }
   searchTimer = setTimeout(async () => {
     try {
-      const { results } = await backendFetch(`/search?q=${encodeURIComponent(q)}`);
+      let results;
+      if (SEARCH_CATEGORY === 'players') { const {data}=await sb.from('players').select('id,name,position,country').eq('status','approved').ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:p.name,meta:`${p.position||'Player'} · ${p.country||''}`,type:'player'})); }
+      else if (SEARCH_CATEGORY === 'scouts') { const {data}=await sb.from('scouts').select('id,name,organization').eq('verified',true).ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:p.name,meta:p.organization||'Verified scout',type:'scout'})); }
+      else { const response=await backendFetch(`/search?q=${encodeURIComponent(q)}`); results=response.results||[]; }
       out.innerHTML = results.length ? results.map((r) => `<div class="card row between">
           <div><div style="font-weight:600">${escapeHtml(r.name)}</div><div class="muted">${escapeHtml(r.meta || '')}</div></div>
-          <span class="pill">${r.type}</span>
+          <span class="pill">${escapeHtml(r.type)}</span>
         </div>`).join('') : emptyHtml('No results', 'Try a different search term.');
     } catch (e) { out.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`; }
   }, 300);
@@ -1624,4 +1662,45 @@ async function disableMfa(factorId) {
   await sb.auth.mfa.unenroll({ factorId });
   toast('2FA disabled');
   router();
+}
+
+
+// ---------- Story viewer / create menu ----------
+let ACTIVE_STORIES = [];
+let ACTIVE_STORY_INDEX = 0;
+let STORY_TIMER = null;
+async function setSocialFeedMode(mode){SOCIAL_FEED_MODE=mode;await router();}
+function openCreateMenu(){
+  if(!requireAuth())return;
+  document.getElementById('create-menu-backdrop')?.remove();
+  const b=document.createElement('div');b.className='create-menu-backdrop';b.id='create-menu-backdrop';
+  b.innerHTML=`<section class="create-menu" role="dialog" aria-modal="true" aria-label="Create"><h3>Create</h3><button onclick="closeCreateMenu();go('/story-settings')">Story <span>Photo or video · 24 hours</span></button><button onclick="closeCreateMenu();go('/feed');setTimeout(()=>document.getElementById('composer-body')?.focus(),80)">Post <span>Share a moment</span></button><button onclick="closeCreateMenu();go('/reels')">Reel <span>Short football video</span></button><button onclick="closeCreateMenu();go('/upload')">Player profile <span>Submit a player for review</span></button><button onclick="closeCreateMenu()" style="justify-content:center;color:#aaa">Cancel</button></section>`;
+  b.addEventListener('click',e=>{if(e.target===b)closeCreateMenu()});document.body.appendChild(b);
+}
+function closeCreateMenu(){document.getElementById('create-menu-backdrop')?.remove();}
+async function openStoryViewer(storyId){
+  clearTimeout(STORY_TIMER);
+  const {data:rows,error}=await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').eq('status','published').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}).limit(100);
+  if(error){toast('Stories could not load');return;}
+  ACTIVE_STORIES=rows||[];ACTIVE_STORY_INDEX=ACTIVE_STORIES.findIndex(s=>s.id===storyId);
+  if(ACTIVE_STORY_INDEX<0)return toast('This story has expired');
+  showStoryAtIndex();
+}
+async function showStoryAtIndex(){
+  clearTimeout(STORY_TIMER);
+  const s=ACTIVE_STORIES[ACTIVE_STORY_INDEX];if(!s){closeStoryViewer();return;}
+  const profiles=await fetchProfilesMap([s.author_id]);const p=profiles[s.author_id]||{};
+  document.getElementById('story-viewer-backdrop')?.remove();
+  const b=document.createElement('div');b.id='story-viewer-backdrop';b.innerHTML=`<section class="story-viewer" role="dialog" aria-modal="true" aria-label="Story by ${escapeHtml(p.display_name||'Member')}"><div class="story-progress-row">${ACTIVE_STORIES.map((_,i)=>`<div class="story-progress-track"><span style="width:${i<ACTIVE_STORY_INDEX?'100%':'0%'}"></span></div>`).join('')}</div><div class="story-viewer-header">${avatarHtml(p.avatar_url,p.display_name,'sm')}<span class="story-name">${escapeHtml(p.username||p.display_name||'Member')} · ${escapeHtml(timeAgo(s.created_at))}</span><button type="button" onclick="closeStoryViewer()" aria-label="Close story">×</button></div>${s.media_type==='external_video'? `<video class="story-viewer-media" src="${escapeHtml(s.media_url)}" autoplay playsinline controls></video>`:`<img class="story-viewer-media" src="${escapeHtml(s.media_url)}" alt="Story">`}<button class="story-tap-zone prev" onclick="stepStory(-1)" aria-label="Previous story"></button><button class="story-tap-zone next" onclick="stepStory(1)" aria-label="Next story"></button><div class="story-caption">${escapeHtml(s.caption||'')}</div><form class="story-reply" onsubmit="event.preventDefault();replyToStory('${s.id}')"><input id="story-reply-input" placeholder="Reply to story…" aria-label="Reply to story" maxlength="2000"><button type="submit">Send</button></form></section>`;
+  b.addEventListener('click',e=>{if(e.target===b)closeStoryViewer()});document.body.appendChild(b);
+  if(CURRENT_USER && s.author_id!==CURRENT_USER.id) await sb.from('social_story_views').upsert({story_id:s.id,viewer_id:CURRENT_USER.id},{onConflict:'story_id,viewer_id'});
+  const tracks=b.querySelectorAll('.story-progress-track span');if(tracks[ACTIVE_STORY_INDEX]){tracks[ACTIVE_STORY_INDEX].style.transition='width 5s linear';requestAnimationFrame(()=>tracks[ACTIVE_STORY_INDEX].style.width='100%');}
+  const media=b.querySelector('video');if(media){media.onended=()=>stepStory(1);STORY_TIMER=setTimeout(()=>stepStory(1),Math.max(5000,Math.min(15000,(media.duration||7)*1000)));}else STORY_TIMER=setTimeout(()=>stepStory(1),5000);
+}
+function stepStory(delta){ACTIVE_STORY_INDEX+=delta;if(ACTIVE_STORY_INDEX<0)ACTIVE_STORY_INDEX=0;if(ACTIVE_STORY_INDEX>=ACTIVE_STORIES.length){closeStoryViewer();return;}showStoryAtIndex();}
+function closeStoryViewer(){clearTimeout(STORY_TIMER);document.getElementById('story-viewer-backdrop')?.remove();ACTIVE_STORIES=[];}
+async function replyToStory(storyId){
+  if(!requireAuth())return;const input=document.getElementById('story-reply-input');const body=input?.value.trim();if(!body)return;
+  const {error}=await sb.from('social_story_replies').insert({story_id:storyId,sender_id:CURRENT_USER.id,body});
+  if(error)return toast(error.message);input.value='';toast('Reply sent');
 }
