@@ -67,11 +67,11 @@ class AppTheme {
         headlineLarge: display(32),
         headlineMedium: display(24),
         titleLarge: body(20, weight: FontWeight.w700),
-        titleMedium: body(16, weight: FontWeight.w650),
+        titleMedium: body(16, weight: FontWeight.w600),
         bodyLarge: body(16),
         bodyMedium: body(14),
         bodySmall: body(12, color: AppColors.sub),
-        labelLarge: body(14, weight: FontWeight.w650),
+        labelLarge: body(14, weight: FontWeight.w600),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
