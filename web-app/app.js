@@ -1218,9 +1218,12 @@ async function sendReelFeedback(reelId, feedback) {
   if (!requireAuth()) return;
   try {
     if (feedback === 'report') {
-      const reason = window.prompt('Briefly describe the issue (spam, abuse, harmful content, or other):');
-      if (!reason?.trim()) return;
-      const { error } = await sb.from('content_reports').insert({ reporter_id: CURRENT_USER.id, content_type: 'reel', content_id: reelId, reason: reason.trim().slice(0, 500) });
+      const options = ['spam','harassment','impersonation','scam','hate','sexual','violence','copyright','misinformation','other'];
+      const choice = window.prompt('Choose a report reason: ' + options.join(', '), 'other');
+      const reason = options.includes((choice || '').trim().toLowerCase()) ? choice.trim().toLowerCase() : null;
+      if (!reason) { toast('Choose one of the listed report reasons.'); return; }
+      const details = window.prompt('Optional details for the review team (up to 2,000 characters):', '') || '';
+      const { error } = await sb.from('content_reports').insert({ reporter_id: CURRENT_USER.id, target_type: 'reel', target_id: reelId, reason, details: details.slice(0, 2000) });
       if (error) throw error;
       toast('Report submitted for review');
     } else {
