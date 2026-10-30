@@ -1351,14 +1351,14 @@ RENDERERS.profile = async (el) => {
       <div class="row profile-actions"><button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button><button class="btn secondary" onclick="go('/analytics')">Professional dashboard</button></div></div>
     </section>
     <p class="profile-bio">${escapeHtml(p.bio || '')}</p>
-    <div class="profile-shortcuts"><button onclick="go('/story-settings')"><span class="highlight-circle">+</span><small>New story</small></button>${(highlights||[]).map(h=>`<button onclick="toast('Story highlights viewer is coming next')"><span class="highlight-circle">${h.cover_url?`<img src="${escapeHtml(h.cover_url)}" alt="">`:'+'}</span><small>${escapeHtml(h.title)}</small></button>`).join('')}</div>
+    <div class="profile-shortcuts"><button onclick="go('/story-settings')"><span class="highlight-circle">+</span><small>New story</small></button>${(highlights||[]).map(h=>`<button onclick="openStoryHighlight('${h.id}')"><span class="highlight-circle">${h.cover_url?`<img src="${escapeHtml(h.cover_url)}" alt="">`:'+'}</span><small>${escapeHtml(h.title)}</small></button>`).join('')}</div>
     <div class="profile-tabs"><button class="active" onclick="setProfileGridTab('posts',this)">Posts</button><button onclick="setProfileGridTab('reels',this)">Reels</button><button onclick="go('/analytics')">Insights</button></div>
     <div class="profile-grid" id="profile-grid">${profileGrid||emptyHtml('No posts yet','Share your first football moment.')}</div>
     <div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div>
     <div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>
       ${chev('Account settings', "go('/account-settings');closeProfileMenu()")}
       ${chev('Security and privacy', "go('/security-settings');closeProfileMenu()")}
-      ${chev('Story and close friends', "go('/story-settings');closeProfileMenu()")}
+      ${chev('Create story', "go('/story-settings');closeProfileMenu()")}
       ${chev('Groups and communities', "go('/groups');closeProfileMenu()")}
       ${chev('Scouts and opportunities', "go('/scouts');closeProfileMenu()")}
       ${chev('Notifications', "go('/notification-preferences');closeProfileMenu()")}
@@ -1726,4 +1726,14 @@ function openSearchResult(type,id){
  else if(type==='reel')go('/reels');
  else if(type==='club')go('/scouts');
  else go('/public-profile/'+id);
+}
+
+async function openStoryHighlight(highlightId){
+ const {data:items,error}=await sb.from('story_highlight_items').select('story_id,position').eq('highlight_id',highlightId).order('position',{ascending:true});
+ if(error||!items?.length)return toast('No stories in this highlight yet');
+ const ids=items.map(x=>x.story_id);
+ const {data:stories}=await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').in('id',ids).eq('status','published').order('created_at',{ascending:true});
+ ACTIVE_STORIES=(stories||[]).sort((x,y)=>ids.indexOf(x.id)-ids.indexOf(y.id));
+ if(!ACTIVE_STORIES.length)return toast('These stories are no longer available to view');
+ ACTIVE_STORY_INDEX=0;showStoryAtIndex();
 }
