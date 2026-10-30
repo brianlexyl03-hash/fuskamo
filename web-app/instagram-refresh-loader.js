@@ -53,6 +53,7 @@
     script.textContent = scriptText;
     document.body.appendChild(script);
     window.__fuskamoSocialRefreshReady = true;
+    if (typeof router === 'function') router();
   } catch (error) {
     console.error('[FUSKAMO] Social UI refresh could not be loaded:', error);
   }
