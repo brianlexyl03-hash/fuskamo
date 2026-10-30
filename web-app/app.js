@@ -444,7 +444,6 @@ function feedPostHtml(p, profile, isLiked) {
     <div class="post-header row" style="align-items:center;margin-bottom:10px">${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
     <div style="flex:1;min-width:0">
       <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
-      ${p.body ? `<p style="margin:2px 0 6px;cursor:pointer;line-height:1.4" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
       ${p.media_url ? `<div class="post-media" style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
         ${p.media_type === 'external_video' ? feedVideoHtml(p.media_url) : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
         <div class="dbl-heart">${HEART_SVG_FILLED}</div>
@@ -454,6 +453,7 @@ function feedPostHtml(p, profile, isLiked) {
         <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
         <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
       </div>
+      ${p.body ? `<p class="post-caption" style="margin:8px 0 0;line-height:1.5;overflow-wrap:anywhere"><strong>${escapeHtml(profile?.username || profile?.display_name || 'Member')}</strong> ${escapeHtml(p.body)}</p>` : ''}
     </div>
   </article>`;
 }
