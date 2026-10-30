@@ -3,7 +3,7 @@
  const intro=document.getElementById('splash'); if(!intro)return; let finished=false;
  const enter=intro.querySelector('#enter-fuskamo'),skip=intro.querySelector('#skip-intro'); let timer,readyTimer;
  const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);clearTimeout(readyTimer);intro.classList.add('opening');setTimeout(()=>intro.classList.add('cinema-out','hide'),720);setTimeout(()=>intro.remove(),1700)};
- const ready=()=>intro.classList.add('is-ready');
+ const ready=()=>{intro.classList.add('is-ready');enter?.focus({preventScroll:true})};
  window.finishCinematicIntro=finish;window.cinematicIntroReady=ready;
  enter?.addEventListener('click',finish);skip?.addEventListener('click',finish);
  window.addEventListener('keydown',e=>{if(!finished&&(e.key==='Escape'||e.key==='Enter'))finish()});
