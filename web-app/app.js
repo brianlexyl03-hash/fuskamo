@@ -1445,7 +1445,7 @@ RENDERERS.profile = async (el) => {
       ${chev('Scouts and opportunities', "go('/scouts');closeProfileMenu()")}
       ${chev('Notifications', "go('/notification-preferences');closeProfileMenu()")}
       ${chev('Get verified', "go('/verification');closeProfileMenu()")}
-      ${chev('My reports', "go('/moderation');closeProfileMenu()")}
+      ${chev('My reports', "go('/my-reports');closeProfileMenu()")}
       ${chev('Two-factor authentication', "go('/mfa-setup');closeProfileMenu()")}
       <button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button>
     </div>`;
