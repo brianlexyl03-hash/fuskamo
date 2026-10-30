@@ -260,3 +260,9 @@ label{font-size:13px;color:#c7c7c7}
 .scout-result{gap:12px}
 .scout-result .row{min-width:0}
 @media(max-width:760px){.player-profile-card{margin:0 12px;padding:16px}.player-profile-top{align-items:flex-start;gap:12px}.player-profile-avatar{width:72px;height:72px;flex-basis:72px;font-size:24px}.player-profile-top h1{font-size:21px}.player-profile-card .row>.btn{flex:1;padding:0 10px}.scout-result .btn{font-size:12px}}
+
+.search-result{width:100%;text-align:left;color:#f5f5f5;cursor:pointer;padding:14px;margin-bottom:8px}
+.search-result:hover{background:#17181c;border-color:#4a4b50}
+.search-result>div{min-width:0}
+.search-result .pill{flex-shrink:0}
+.story-ring .story-initial .avatar{width:100%;height:100%;border:0;background:transparent}
