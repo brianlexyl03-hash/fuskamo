@@ -801,7 +801,8 @@ async function createGroup() {
     go('/group/' + data.id);
   } catch (e) { toast(e.message || 'Could not create group'); btn.disabled = false; btn.textContent = 'Create group'; }
 }
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '⚽'];
+const REACTION_VALUES = ['👍', '❤️', '😂', '🔥', '👏', '⚽'];
+const REACTION_LABELS = { '👍': 'Like', '❤️': 'Love', '😂': 'Funny', '🔥': 'On fire', '👏': 'Applause', '⚽': 'Football' };
 RENDERERS.group = async (el, id) => {
   const { data: group } = await sb.from('groups').select('*').eq('id', id).single();
   if (!group) { el.innerHTML = emptyHtml('Group not found', ''); return; }
@@ -873,17 +874,17 @@ function groupPostHtml(m, profile, msgReactions, isPinned) {
     ${authorLine(profile, m.created_at)}
     <p style="margin-top:6px">${escapeHtml(m.content)}</p>
     <div class="reaction-row" id="reactions-${m.id}">
-      ${Object.entries(counts).map(([emoji, c]) => `<span class="reaction-pill ${c.mine ? 'mine' : ''}" onclick="toggleReaction('${m.id}','${emoji}',this)">${emoji} ${c.n}</span>`).join('')}
-      <span class="reaction-add" onclick="openEmojiPicker('${m.id}', this)">+ react</span>
+      ${Object.entries(counts).map(([reaction, c]) => `<button type="button" class="reaction-pill ${c.mine ? 'mine' : ''}" aria-label="${REACTION_LABELS[reaction] || 'Reaction'} ${c.n}" onclick="toggleReaction('${m.id}','${reaction}',this)">${REACTION_LABELS[reaction] || 'React'} <span>${c.n}</span></button>`).join('')}
+      <span class="reaction-add" onclick="openReactionPicker('${m.id}', this)">+ react</span>
     </div>
   </div>`;
 }
 let openPicker = null;
-function openEmojiPicker(msgId, addEl) {
+function openReactionPicker(msgId, addEl) {
   if (openPicker) { openPicker.remove(); openPicker = null; }
   const picker = document.createElement('div');
   picker.className = 'emoji-picker';
-  picker.innerHTML = REACTION_EMOJIS.map((e) => `<span onclick="toggleReaction('${msgId}','${e}',null);this.parentElement.remove()">${e}</span>`).join('');
+  picker.innerHTML = REACTION_VALUES.map((value) => `<button type="button" onclick="toggleReaction('${msgId}','${value}',null);this.parentElement.remove()">${REACTION_LABELS[value]}</button>`).join('');
   addEl.parentElement.appendChild(picker);
   openPicker = picker;
 }
@@ -1279,7 +1280,7 @@ RENDERERS.achievements = async (el) => {
   el.innerHTML = `<h2 style="margin-bottom:14px">Achievements</h2>
     ${(all || []).map((a) => { const earned = earnedIds.has(a.id); const p = progMap[a.id];
       return `<div class="card row between" style="opacity:${earned ? 1 : 0.6}">
-        <div class="row"><span style="font-size:22px">${a.icon}</span><div><div style="font-weight:600">${escapeHtml(a.name)}</div><div class="muted">${escapeHtml(a.description)}</div></div></div>
+        <div class="row"><span class="achievement-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v2a4 4 0 0 0 4 4M16 6h3v2a4 4 0 0 1-4 4M12 13v5m-4 2h8m-7 0v-2h6v2"/></svg></span><div><div style="font-weight:600">${escapeHtml(a.name)}</div><div class="muted">${escapeHtml(a.description)}</div></div></div>
         ${earned ? '<span class="badge blue">Earned</span>' : (p ? `<span class="muted">${p.progress}/${p.target}</span>` : '')}
       </div>`; }).join('')}`;
 };
