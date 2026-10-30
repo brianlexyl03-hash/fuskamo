@@ -706,8 +706,9 @@ RENDERERS.scouts = async (el) => {
   el.innerHTML = `<h2 style="margin-bottom:14px">Scouts</h2>
     ${!myApp ? `<div class="card"><p style="margin-bottom:10px">Are you a scout, coach, or club rep?</p><button class="btn secondary" onclick="go('/scout-apply')">Apply as a scout</button></div>`
       : (myApp.verified ? `<div class="card"><p><span class="verified-mark">Verified</span> Your scout profile is verified. <a onclick="go('/scout-preferences')" style="color:var(--green);cursor:pointer">Set your preferences →</a></p></div>` : `<div class="card"><p class="muted">Your scout application is under review.</p></div>`)}
-    ${(scouts || []).map((s) => `<div class="card row between">
-      <div class="row">${avatarHtml(null, s.name)}<div><div style="font-weight:600">${escapeHtml(s.name)}${badgeHtml(s.badge_type, s.verified)}</div><div class="muted">${escapeHtml(s.organization || '')}</div></div></div>
+    ${(scouts || []).map((s) => `<div class="card scout-result row between">
+      <div class="row">${avatarHtml(s.avatar_url, s.name)}<div><div style="font-weight:600">${escapeHtml(s.name)}${badgeHtml(s.badge_type, s.verified)}</div><div class="muted">${escapeHtml(s.organization || '')}</div><div class="muted">${escapeHtml(s.country || '')}</div></div></div>
+      ${s.user_id?`<button class="btn secondary btn-sm" onclick="go('/public-profile/${s.user_id}')">View profile</button>`:'<span class="pill">Verified</span>'}
     </div>`).join('') || emptyHtml('No scouts yet', '')}`;
 };
 RENDERERS['scout-apply'] = async (el) => {
@@ -1712,7 +1713,7 @@ async function showStoryAtIndex(){
   document.getElementById('story-viewer-backdrop')?.remove();
   const b=document.createElement('div');b.id='story-viewer-backdrop';b.innerHTML=`<section class="story-viewer" role="dialog" aria-modal="true" aria-label="Story by ${escapeHtml(p.display_name||'Member')}"><div class="story-progress-row">${ACTIVE_STORIES.map((_,i)=>`<div class="story-progress-track"><span style="width:${i<ACTIVE_STORY_INDEX?'100%':'0%'}"></span></div>`).join('')}</div><div class="story-viewer-header">${avatarHtml(p.avatar_url,p.display_name,'sm')}<span class="story-name">${escapeHtml(p.username||p.display_name||'Member')} · ${escapeHtml(timeAgo(s.created_at))}</span><button type="button" onclick="closeStoryViewer()" aria-label="Close story">×</button></div>${s.media_type==='external_video'? `<video class="story-viewer-media" src="${escapeHtml(s.media_url)}" autoplay playsinline controls></video>`:`<img class="story-viewer-media" src="${escapeHtml(s.media_url)}" alt="Story">`}<button class="story-tap-zone prev" onclick="stepStory(-1)" aria-label="Previous story"></button><button class="story-tap-zone next" onclick="stepStory(1)" aria-label="Next story"></button><div class="story-caption">${escapeHtml(s.caption||'')}</div><form class="story-reply" onsubmit="event.preventDefault();replyToStory('${s.id}')"><input id="story-reply-input" placeholder="Reply to story…" aria-label="Reply to story" maxlength="2000"><button type="submit">Send</button></form></section>`;
   b.addEventListener('click',e=>{if(e.target===b)closeStoryViewer()});document.body.appendChild(b);
-  if(CURRENT_USER && s.author_id!==CURRENT_USER.id) await sb.from('social_story_views').upsert({story_id:s.id,viewer_id:CURRENT_USER.id},{onConflict:'story_id,viewer_id'});
+  if(CURRENT_USER && s.author_id!==CURRENT_USER.id) await sb.from('social_story_views').insert({story_id:s.id,viewer_id:CURRENT_USER.id});
   const tracks=b.querySelectorAll('.story-progress-track span');if(tracks[ACTIVE_STORY_INDEX]){tracks[ACTIVE_STORY_INDEX].style.transition='width 5s linear';requestAnimationFrame(()=>tracks[ACTIVE_STORY_INDEX].style.width='100%');}
   const media=b.querySelector('video');if(media){media.onended=()=>stepStory(1);STORY_TIMER=setTimeout(()=>stepStory(1),Math.max(5000,Math.min(15000,(media.duration||7)*1000)));}else STORY_TIMER=setTimeout(()=>stepStory(1),5000);
 }
