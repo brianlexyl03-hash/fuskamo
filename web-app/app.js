@@ -66,7 +66,7 @@ const ROUTES = [
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
   'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post', 'join',
 ];
-const NAV_TABS = { feed: 'feed', discover: 'discover', groups: 'groups', scouts: 'scouts', profile: 'profile' };
+const NAV_TABS = { feed: 'feed', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
 
 function parseHash() {
   const raw = (location.hash || '#/feed').slice(2); // strip '#/'
@@ -78,6 +78,7 @@ function go(path) { location.hash = '#' + path; }
 
 async function router() {
   if (!CURRENT_USER) { showAuthGate(); return; }
+  document.body.classList.remove('auth-mode');
   const { path, param } = parseHash();
   const viewId = 'view-' + path;
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
@@ -117,6 +118,7 @@ window.addEventListener('hashchange', router);
 
 // ---------- Auth ----------
 function showAuthGate() {
+  document.body.classList.add('auth-mode');
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
   const authView = document.getElementById('view-auth');
   authView.classList.add('active');
@@ -306,44 +308,44 @@ function playerCard(pl) {
 }
 
 // ---------- FEED ----------
+let SOCIAL_FEED_MODE = 'for-you';
 RENDERERS.feed = async (el) => {
-  const { data: posts } = await sb.from('social_posts').select('*').eq('visibility', 'public').eq('status', 'published').is('reply_to_id', null).order('created_at', { ascending: false }).limit(30);
+  let followedIds = [];
+  if (SOCIAL_FEED_MODE === 'following' && CURRENT_USER) {
+    const { data: follows } = await sb.from('profile_follows').select('followed_id').eq('follower_id', CURRENT_USER.id);
+    followedIds = (follows || []).map((f) => f.followed_id);
+  }
+  let postQuery = sb.from('social_posts').select('*').eq('status', 'published').is('reply_to_id', null).order('created_at', { ascending: false }).limit(30);
+  if (SOCIAL_FEED_MODE === 'following') {
+    if (followedIds.length) postQuery = postQuery.in('author_id', followedIds);
+    else postQuery = postQuery.eq('author_id', CURRENT_USER?.id || '00000000-0000-0000-0000-000000000000');
+  } else postQuery = postQuery.eq('visibility', 'public');
+  const { data: posts } = await postQuery;
   const profiles = await fetchProfilesMap((posts || []).map((p) => p.author_id));
   const liked = await myLikedSet('social_post_likes', 'post_id', (posts || []).map((p) => p.id));
-  let mediaStrip = '';
+  const { data: storyRows } = await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').eq('status','published').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}).limit(100);
+  const stories = storyRows || [];
+  const storyProfiles = await fetchProfilesMap(stories.map((s) => s.author_id));
+  const seenStories = new Set();
   if (CURRENT_USER) {
-    const { data: follows } = await sb.from('profile_follows').select('followed_id').eq('follower_id', CURRENT_USER.id);
-    const followedIds = (follows || []).map((f) => f.followed_id);
-    const { data: myLikedRows } = await sb.from('social_post_likes').select('post_id').eq('user_id', CURRENT_USER.id).limit(20);
-    const likedPostIds = (myLikedRows || []).map((r) => r.post_id);
-    let mediaPosts = [];
-    if (followedIds.length) { const { data } = await sb.from('social_posts').select('id,media_url,media_type,author_id').in('author_id', followedIds).not('media_url', 'is', null).order('created_at', { ascending: false }).limit(10); mediaPosts = mediaPosts.concat(data || []); }
-    if (likedPostIds.length) { const { data } = await sb.from('social_posts').select('id,media_url,media_type,author_id').in('id', likedPostIds).not('media_url', 'is', null).limit(10); mediaPosts = mediaPosts.concat(data || []); }
-    const seen = new Set();
-    mediaPosts = mediaPosts.filter((m) => !seen.has(m.id) && seen.add(m.id));
-    if (mediaPosts.length) {
-      mediaStrip = `<div style="margin-bottom:16px"><p class="muted" style="margin-bottom:8px;padding:0 2px">From people you follow</p>
-        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
-          ${mediaPosts.map((m) => `<div style="flex-shrink:0;width:96px;height:96px;border-radius:var(--r-sm);overflow:hidden;cursor:pointer;background:var(--card)" onclick="go('/post/${m.id}')">
-            ${m.media_type === 'external_video' ? `<video src="${escapeHtml(m.media_url)}" style="width:100%;height:100%;object-fit:cover"></video>` : `<img src="${escapeHtml(m.media_url)}" style="width:100%;height:100%;object-fit:cover">`}
-          </div>`).join('')}
-        </div></div>`;
-    }
+    const { data: seen } = await sb.from('social_story_views').select('story_id').eq('viewer_id',CURRENT_USER.id).in('story_id',stories.map(s=>s.id).length?stories.map(s=>s.id):['00000000-0000-0000-0000-000000000000']);
+    (seen||[]).forEach(x=>seenStories.add(x.story_id));
   }
+  const { data: suggestionFollows } = await sb.from('profile_follows').select('followed_id').eq('follower_id',CURRENT_USER.id);
+  const followedForSuggestions = new Set((suggestionFollows||[]).map(x=>x.followed_id));
+  const { data: suggestionRows } = await sb.from('profiles').select('user_id,display_name,username,avatar_url,verified,role').neq('user_id',CURRENT_USER.id).limit(24);
+  const suggestionsHtml = (suggestionRows||[]).filter(x=>!followedForSuggestions.has(x.user_id)).slice(0,5).map(p=>`<div class="suggestion">${avatarHtml(p.avatar_url,p.display_name,'sm')}<div class="suggestion-copy"><strong>${escapeHtml(p.username||p.display_name||'Member')}</strong><small>${escapeHtml(p.role||'football community')}</small></div><button onclick="go('/public-profile/${p.user_id}')">View</button></div>`).join('');
+  const storyHtml = `<div class="stories-tray" aria-label="Stories">
+    <button class="story-bubble" type="button" onclick="go('/story-settings')" aria-label="Add a story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
+    ${[...new Map(stories.map(s=>[s.author_id,s])).values()].map(s=>{const p=storyProfiles[s.author_id]||{};const own= s.author_id===CURRENT_USER?.id;return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url? `<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${own?'Your story':escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
+  </div>`;
   el.innerHTML = `
-    <section class="field-hero" aria-label="FUSKAMO football talent network">
-      <div class="field-hero-copy">
-        <p class="eyebrow">THE GLOBAL FOOTBALL NETWORK</p>
-        <h1>MAKE YOUR<br>GAME <span>MATTER.</span></h1>
-        <p>Find your next opportunity. Put your football journey in front of the people who can move it forward.</p>
-        <div class="field-hero-actions">
-          <button type="button" class="btn" onclick="go('/discover')">Discover talent</button>
-          <button type="button" class="btn secondary" onclick="go('/reels')">Watch reels</button>
-        </div>
-      </div>
-      <div class="field-hero-player" aria-hidden="true"></div>
-      <div class="field-hero-index">FUSKAMO / 001 — BUILT FOR THE GAME</div>
-    </section>
+    ${storyHtml}
+    <div class="feed-tabs" role="tablist" aria-label="Feed type">
+      <button type="button" class="${SOCIAL_FEED_MODE==='for-you'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='for-you'}" onclick="setSocialFeedMode('for-you')">For you</button>
+      <button type="button" class="${SOCIAL_FEED_MODE==='following'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='following'}" onclick="setSocialFeedMode('following')">Following</button>
+    </div>
+    <div class="football-shortcuts"><button onclick="go('/discover')">Players</button><button onclick="go('/scouts')">Scouts</button><button onclick="go('/groups')">Groups</button><button onclick="go('/messages')">Messages</button></div>
     <div class="composer-row">
       ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
       <div style="flex:1">
@@ -358,8 +360,8 @@ RENDERERS.feed = async (el) => {
         </div>
       </div>
     </div>
-    ${mediaStrip}
-    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml('No posts yet', 'Be the first to share something.')}</div>`;
+    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>
+    <aside class="social-suggestions"><div class="suggestion-head"><span>Suggested for you</span><button onclick="go('/discover')">See all</button></div>${suggestionsHtml || '<p class="muted">Follow players, scouts and clubs to build your network.</p>'}<div class="suggestion-links"><button onclick="go('/discover')">Discover players</button><button onclick="go('/scouts')">Find scouts</button><button onclick="go('/groups')">Football groups</button><button onclick="go('/account-settings')">Settings</button></div><p class="suggestion-footer">FUSKAMO · Football, talent, community</p></aside>`;
   initFeedVideoAutoplay();
 };
 let composerFile = null;
@@ -422,22 +424,22 @@ function initFeedVideoAutoplay() {
   videos.forEach((v) => observer.observe(v));
 }
 function feedPostHtml(p, profile, isLiked) {
-  return `<div class="tweet-row">
-    ${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
+  return `<article class="card post-card">
+    <div class="post-header row" style="align-items:center;margin-bottom:10px">${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
     <div style="flex:1;min-width:0">
       <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
-      ${p.body ? `<p style="margin:2px 0 6px;cursor:pointer;line-height:1.4" onclick="go('/post/${p.id}')">${escapeHtml(p.body)}</p>` : ''}
-      ${p.media_url ? `<div style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
+      ${p.media_url ? `<div class="post-media" style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
         ${p.media_type === 'external_video' ? feedVideoHtml(p.media_url) : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
         <div class="dbl-heart">${HEART_SVG_FILLED}</div>
       </div>` : ''}
-      <div class="row" style="gap:28px;margin-top:8px">
+      <div class="row post-actions" style="gap:16px;margin-top:10px">
         <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
         <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
         <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
       </div>
+      ${p.body ? `<p class="post-caption" style="margin:8px 0 0;line-height:1.5;overflow-wrap:anywhere"><strong>${escapeHtml(profile?.username || profile?.display_name || 'Member')}</strong> ${escapeHtml(p.body)}</p>` : ''}
     </div>
-  </div>`;
+  </article>`;
 }
 function HEART_SVG(filled) { return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`; }
 const HEART_SVG_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`;
@@ -448,7 +450,7 @@ async function dblTapLike(postId, wrapEl) {
   const heart = wrapEl.querySelector('.dbl-heart');
   heart.classList.add('pop');
   setTimeout(() => heart.classList.remove('pop'), 700);
-  const engageBtn = wrapEl.closest('.card').querySelector('.engage-btn');
+  const engageBtn = wrapEl.closest('.post-card, .card').querySelector('.engage-btn');
   if (engageBtn && engageBtn.dataset.liked !== 'true') {
     engageBtn.dataset.liked = 'true';
     engageBtn.classList.add('liked');
@@ -583,21 +585,43 @@ RENDERERS.region = async (el, country) => {
 
 // ---------- SEARCH ----------
 RENDERERS.search = async (el) => {
-  el.innerHTML = `<input id="search-input" placeholder="Search players, scouts, groups..." oninput="runSearch()" autofocus><div id="search-results"></div>`;
+  el.innerHTML = `<div class="search-page"><h2 style="margin-bottom:16px">Explore football</h2><input id="search-input" placeholder="Search players, scouts, clubs, groups..." oninput="runSearch()" autofocus aria-label="Search FUSKAMO"><div class="search-categories" role="tablist" aria-label="Search categories"><button class="active" onclick="setSearchCategory('all',this)">For you</button><button onclick="setSearchCategory('players',this)">Players</button><button onclick="setSearchCategory('scouts',this)">Scouts</button><button onclick="setSearchCategory('groups',this)">Groups</button><button onclick="setSearchCategory('posts',this)">Posts</button></div><div id="search-results"><div class="explore-grid" id="explore-grid"></div></div></div>`;
+  loadExploreGrid();
+};
+let SEARCH_CATEGORY = 'all';
+function setSearchCategory(category,button){
+  SEARCH_CATEGORY=category;
+  document.querySelectorAll('.search-categories button').forEach(b=>b.classList.toggle('active',b===button));
+  const input=document.getElementById('search-input');
+  if(input?.value.trim()) runSearch(); else loadExploreGrid();
+}
+async function loadExploreGrid(){
+  const grid=document.getElementById('explore-grid');
+  if(!grid)return;
+  if(SEARCH_CATEGORY==='players'){const {data}=await sb.from('players').select('id,name,position,country').eq('status','approved').order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(p=>`<button class="explore-tile explore-player" onclick="go('/public-profile/${p.id}')"><span>${escapeHtml(p.name)}</span><small>${escapeHtml(p.position||'Player')} · ${escapeHtml(p.country||'')}</small></button>`).join('')||emptyHtml('No players yet','Approved player profiles will appear here.');return;}
+  if(SEARCH_CATEGORY==='scouts'){const {data}=await sb.from('scouts').select('id,name,organization').eq('verified',true).order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(s=>`<button class="explore-tile explore-player" onclick="go('/scouts')"><span>${escapeHtml(s.name)}</span><small>${escapeHtml(s.organization||'Verified scout')}</small></button>`).join('')||emptyHtml('No verified scouts yet','Check back soon.');return;}
+  if(SEARCH_CATEGORY==='groups'){const {data}=await sb.from('groups').select('id,name,description').order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(g=>`<button class="explore-tile explore-player" onclick="go('/group/${g.id}')"><span>${escapeHtml(g.name)}</span><small>${escapeHtml(g.description||'Football community')}</small></button>`).join('')||emptyHtml('No groups yet','Football communities will appear here.');return;}
+  const {data}=await sb.from('social_posts').select('id,media_url,media_type,body').eq('status','published').eq('visibility','public').not('media_url','is',null).order('created_at',{ascending:false}).limit(24);
+  grid.innerHTML=(data||[]).map(p=>`<button class="explore-tile" onclick="go('/post/${p.id}')" aria-label="Open post"><img src="${escapeHtml(p.media_type==='external_video'?'':p.media_url)}" alt="" loading="lazy">${p.media_type==='external_video'?'<span class="tile-play">▶</span>':''}<span class="tile-meta">${escapeHtml((p.body||'Football post').slice(0,90))}</span></button>`).join('')||emptyHtml('Explore FUSKAMO','Posts and football moments will appear here.');
 };
 let searchTimer;
 async function runSearch() {
   clearTimeout(searchTimer);
   const q = document.getElementById('search-input').value.trim();
   const out = document.getElementById('search-results');
-  if (!q) { out.innerHTML = ''; return; }
+  if (!q) { out.innerHTML = '<div class="explore-grid" id="explore-grid"></div>'; loadExploreGrid(); return; }
   searchTimer = setTimeout(async () => {
     try {
-      const { results } = await backendFetch(`/search?q=${encodeURIComponent(q)}`);
-      out.innerHTML = results.length ? results.map((r) => `<div class="card row between">
+      let results;
+      if (SEARCH_CATEGORY === 'players') { const {data}=await sb.from('players').select('id,name,position,country').eq('status','approved').ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:p.name,meta:`${p.position||'Player'} · ${p.country||''}`,type:'player'})); }
+      else if (SEARCH_CATEGORY === 'scouts') { const {data}=await sb.from('scouts').select('id,user_id,name,organization').eq('verified',true).ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.user_id||p.id,name:p.name,meta:p.organization||'Verified scout',type:'scout'})); }
+      else if (SEARCH_CATEGORY === 'groups') { const {data}=await sb.from('groups').select('id,name,description').ilike('name',`%${q}%`).limit(40); results=(data||[]).map(g=>({id:g.id,name:g.name,meta:g.description||'Football community',type:'group'})); }
+      else if (SEARCH_CATEGORY === 'posts') { const {data}=await sb.from('social_posts').select('id,body').eq('visibility','public').eq('status','published').ilike('body',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:(p.body||'Football post').slice(0,90),meta:'Open post',type:'post'})); }
+      else { const response=await backendFetch(`/search?q=${encodeURIComponent(q)}`); results=response.results||[]; }
+      out.innerHTML = results.length ? results.map((r) => `<button type="button" class="card row between search-result" onclick="openSearchResult('${escapeHtml(r.type||'')}','${escapeHtml(r.id||r.user_id||'')}')">
           <div><div style="font-weight:600">${escapeHtml(r.name)}</div><div class="muted">${escapeHtml(r.meta || '')}</div></div>
-          <span class="pill">${r.type}</span>
-        </div>`).join('') : emptyHtml('No results', 'Try a different search term.');
+          <span class="pill">${escapeHtml(r.type||'result')}</span>
+        </button>`).join('') : emptyHtml('No results', 'Try a different search term.');
     } catch (e) { out.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`; }
   }, 300);
 }
@@ -668,8 +692,9 @@ RENDERERS.scouts = async (el) => {
   el.innerHTML = `<h2 style="margin-bottom:14px">Scouts</h2>
     ${!myApp ? `<div class="card"><p style="margin-bottom:10px">Are you a scout, coach, or club rep?</p><button class="btn secondary" onclick="go('/scout-apply')">Apply as a scout</button></div>`
       : (myApp.verified ? `<div class="card"><p><span class="verified-mark">Verified</span> Your scout profile is verified. <a onclick="go('/scout-preferences')" style="color:var(--green);cursor:pointer">Set your preferences →</a></p></div>` : `<div class="card"><p class="muted">Your scout application is under review.</p></div>`)}
-    ${(scouts || []).map((s) => `<div class="card row between">
-      <div class="row">${avatarHtml(null, s.name)}<div><div style="font-weight:600">${escapeHtml(s.name)}${badgeHtml(s.badge_type, s.verified)}</div><div class="muted">${escapeHtml(s.organization || '')}</div></div></div>
+    ${(scouts || []).map((s) => `<div class="card scout-result row between">
+      <div class="row">${avatarHtml(s.avatar_url, s.name)}<div><div style="font-weight:600">${escapeHtml(s.name)}${badgeHtml(s.badge_type, s.verified)}</div><div class="muted">${escapeHtml(s.organization || '')}</div><div class="muted">${escapeHtml(s.country || '')}</div></div></div>
+      ${s.user_id?`<button class="btn secondary btn-sm" onclick="go('/public-profile/${s.user_id}')">View profile</button>`:'<span class="pill">Verified</span>'}
     </div>`).join('') || emptyHtml('No scouts yet', '')}`;
 };
 RENDERERS['scout-apply'] = async (el) => {
@@ -1318,28 +1343,36 @@ RENDERERS.profile = async (el) => {
   const p = CURRENT_PROFILE || {};
   const { count: followers } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('followed_id', CURRENT_USER.id);
   const { count: following } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('follower_id', CURRENT_USER.id);
-  el.innerHTML = `<div class="row between" style="margin-bottom:14px">
-      <div class="row">${avatarHtml(p.avatar_url, p.display_name, 'lg')}
-        <div><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><span class="muted">@${escapeHtml(p.username || 'unset')} · ${p.role}</span></div></div>
-      <button class="icon-btn" onclick="openProfileMenu()" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></button>
-    </div>
-    <p style="margin-bottom:10px">${escapeHtml(p.bio || '')}</p>
-    <div class="row" style="gap:20px;margin-bottom:14px"><span><b>${followers || 0}</b> <span class="muted">followers</span></span><span><b>${following || 0}</b> <span class="muted">following</span></span></div>
-    <div class="grid-2" style="margin-bottom:14px">
-      <button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button>
-      <button class="btn secondary" onclick="go('/analytics')">Analytics</button>
-    </div>
+  const { data: profilePosts } = await sb.from('social_posts').select('id,media_url,media_type,body,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
+  const { data: profileReels } = await sb.from('social_reels').select('id,video_url,thumbnail_url,caption,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
+  const { data: highlights } = await sb.from('story_highlights').select('id,title,cover_url').eq('owner_id',CURRENT_USER.id).order('created_at',{ascending:true});
+  const profileGrid = (profilePosts||[]).filter(x=>x.media_url).map(x=>`<button class="explore-tile" onclick="go('/post/${x.id}')" aria-label="Open post">${x.media_type==='external_video'?'<span class="tile-play">▶</span>':`<img src="${escapeHtml(x.media_url)}" alt="" loading="lazy">`}<span class="tile-meta">${escapeHtml(x.body||'Football post')}</span></button>`).join('');
+  const reelGrid = (profileReels||[]).map(x=>`<button class="explore-tile" onclick="go('/reels')" aria-label="Watch reel">${x.thumbnail_url?`<img src="${escapeHtml(x.thumbnail_url)}" alt="" loading="lazy">`:'<span class="tile-play">▶</span>'}<span class="tile-meta">${escapeHtml(x.caption||'Football reel')}</span></button>`).join('');
+  el.innerHTML = `<section class="profile-header">
+      ${avatarHtml(p.avatar_url, p.display_name, 'lg')}
+      <div class="profile-info"><div class="row between"><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><button class="icon-btn" onclick="openProfileMenu()" aria-label="Profile settings">•••</button></div>
+      <p class="muted">@${escapeHtml(p.username || 'unset')} · ${escapeHtml(p.role||'member')}</p>
+      <div class="profile-stats"><span><b>${(profilePosts||[]).length}</b> posts</span><span><b>${followers || 0}</b> followers</span><span><b>${following || 0}</b> following</span></div>
+      <div class="row profile-actions"><button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button><button class="btn secondary" onclick="go('/analytics')">Professional dashboard</button></div></div>
+    </section>
+    <p class="profile-bio">${escapeHtml(p.bio || '')}</p>
+    <div class="profile-shortcuts"><button onclick="go('/story-settings')"><span class="highlight-circle">+</span><small>New story</small></button>${(highlights||[]).map(h=>`<button onclick="openStoryHighlight('${h.id}')"><span class="highlight-circle">${h.cover_url?`<img src="${escapeHtml(h.cover_url)}" alt="">`:'+'}</span><small>${escapeHtml(h.title)}</small></button>`).join('')}</div>
+    <div class="profile-tabs"><button class="active" onclick="setProfileGridTab('posts',this)">Posts</button><button onclick="setProfileGridTab('reels',this)">Reels</button><button onclick="go('/analytics')">Insights</button></div>
+    <div class="profile-grid" id="profile-grid">${profileGrid||emptyHtml('No posts yet','Share your first football moment.')}</div>
     <div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div>
-    <div id="profile-menu-sheet" class="menu-sheet">
-      <div class="menu-sheet-handle"></div>
+    <div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>
       ${chev('Account settings', "go('/account-settings');closeProfileMenu()")}
-      ${chev('Security', "go('/security-settings');closeProfileMenu()")}
-      ${chev('New story', "go('/story-settings');closeProfileMenu()")}
+      ${chev('Security and privacy', "go('/security-settings');closeProfileMenu()")}
+      ${chev('Create story', "go('/story-settings');closeProfileMenu()")}
+      ${chev('Groups and communities', "go('/groups');closeProfileMenu()")}
+      ${chev('Scouts and opportunities', "go('/scouts');closeProfileMenu()")}
+      ${chev('Notifications', "go('/notification-preferences');closeProfileMenu()")}
       ${chev('Get verified', "go('/verification');closeProfileMenu()")}
       ${chev('My reports', "go('/moderation');closeProfileMenu()")}
       ${chev('Two-factor authentication', "go('/mfa-setup');closeProfileMenu()")}
       <button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button>
     </div>`;
+  window.__profileGridTabs = {posts: `${profileGrid}`, reels: `${reelGrid}`};
 };
 function chev(label, onclick) {
   return `<div class="settings-link" onclick="${onclick}"><span>${label}</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>`;
@@ -1356,7 +1389,18 @@ function closeProfileMenu() {
 // ---------- PUBLIC PROFILE ----------
 RENDERERS['public-profile'] = async (el, userId) => {
   const { data: p } = await sb.from('profiles').select('*').eq('user_id', userId).maybeSingle();
-  if (!p) { el.innerHTML = emptyHtml('Profile not found', ''); return; }
+  if (!p) {
+    const { data: player, error: playerError } = await sb.from('players').select('*').eq('id',userId).eq('status','approved').maybeSingle();
+    if (playerError || !player) { el.innerHTML = emptyHtml('Profile not found', 'This profile may be private or unavailable.'); return; }
+    el.innerHTML = `<section class="player-profile-card">
+      <div class="player-profile-top"><div class="player-profile-avatar">${escapeHtml(initials(player.name||'Player'))}</div><div><p class="muted">FUSKAMO PLAYER CARD</p><h1>${escapeHtml(player.name)}</h1><p class="muted">${escapeHtml(player.position||'Player')} · ${escapeHtml(player.country||'')}</p><p class="muted">${player.age?escapeHtml(String(player.age))+' years old · ':''}${escapeHtml(player.club||'Independent player')}</p></div></div>
+      <div class="player-profile-stats"><span><b>${escapeHtml(player.position||'—')}</b><small>Position</small></span><span><b>${player.age?escapeHtml(String(player.age)):'—'}</b><small>Age</small></span><span><b>${escapeHtml(player.country||'—')}</b><small>Country</small></span></div>
+      ${player.strengths?`<h3>Playing profile</h3><p>${escapeHtml(player.strengths)}</p>`:''}
+      ${player.video_url?`<h3>Player footage</h3><video src="${escapeHtml(player.video_url)}" controls playsinline style="width:100%;max-height:65vh;background:#000;border-radius:10px"></video>`:''}
+      <div class="row" style="margin-top:18px"><button class="btn" onclick="go('/scouts')">Find scouts</button><button class="btn secondary" onclick="sharePlayerProfile('${player.id}')">Share player</button></div>
+    </section>`;
+    return;
+  }
   let isFollowing = false;
   if (CURRENT_USER) { const { data } = await sb.from('profile_follows').select('*').eq('follower_id', CURRENT_USER.id).eq('followed_id', userId).maybeSingle(); isFollowing = !!data; }
   const { data: posts } = await sb.from('social_posts').select('*').eq('author_id', userId).eq('status', 'published').order('created_at', { ascending: false }).limit(20);
@@ -1624,4 +1668,77 @@ async function disableMfa(factorId) {
   await sb.auth.mfa.unenroll({ factorId });
   toast('2FA disabled');
   router();
+}
+
+
+// ---------- Story viewer / create menu ----------
+let ACTIVE_STORIES = [];
+let ACTIVE_STORY_INDEX = 0;
+let STORY_TIMER = null;
+async function setSocialFeedMode(mode){SOCIAL_FEED_MODE=mode;await router();}
+function openCreateMenu(){
+  if(!requireAuth())return;
+  document.getElementById('create-menu-backdrop')?.remove();
+  const b=document.createElement('div');b.className='create-menu-backdrop';b.id='create-menu-backdrop';
+  b.innerHTML=`<section class="create-menu" role="dialog" aria-modal="true" aria-label="Create"><h3>Create</h3><button onclick="closeCreateMenu();go('/story-settings')">Story <span>Photo or video · 24 hours</span></button><button onclick="closeCreateMenu();go('/feed');setTimeout(()=>document.getElementById('composer-body')?.focus(),80)">Post <span>Share a moment</span></button><button onclick="closeCreateMenu();go('/reels')">Reel <span>Short football video</span></button><button onclick="closeCreateMenu();go('/upload')">Player profile <span>Submit a player for review</span></button><button onclick="closeCreateMenu()" style="justify-content:center;color:#aaa">Cancel</button></section>`;
+  b.addEventListener('click',e=>{if(e.target===b)closeCreateMenu()});document.body.appendChild(b);
+}
+function closeCreateMenu(){document.getElementById('create-menu-backdrop')?.remove();}
+async function openStoryViewer(storyId){
+  clearTimeout(STORY_TIMER);
+  const {data:rows,error}=await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').eq('status','published').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}).limit(100);
+  if(error){toast('Stories could not load');return;}
+  ACTIVE_STORIES=rows||[];ACTIVE_STORY_INDEX=ACTIVE_STORIES.findIndex(s=>s.id===storyId);
+  if(ACTIVE_STORY_INDEX<0)return toast('This story has expired');
+  showStoryAtIndex();
+}
+async function showStoryAtIndex(){
+  clearTimeout(STORY_TIMER);
+  const s=ACTIVE_STORIES[ACTIVE_STORY_INDEX];if(!s){closeStoryViewer();return;}
+  const profiles=await fetchProfilesMap([s.author_id]);const p=profiles[s.author_id]||{};
+  document.getElementById('story-viewer-backdrop')?.remove();
+  const b=document.createElement('div');b.id='story-viewer-backdrop';b.innerHTML=`<section class="story-viewer" role="dialog" aria-modal="true" aria-label="Story by ${escapeHtml(p.display_name||'Member')}"><div class="story-progress-row">${ACTIVE_STORIES.map((_,i)=>`<div class="story-progress-track"><span style="width:${i<ACTIVE_STORY_INDEX?'100%':'0%'}"></span></div>`).join('')}</div><div class="story-viewer-header">${avatarHtml(p.avatar_url,p.display_name,'sm')}<span class="story-name">${escapeHtml(p.username||p.display_name||'Member')} · ${escapeHtml(timeAgo(s.created_at))}</span><button type="button" onclick="closeStoryViewer()" aria-label="Close story">×</button></div>${s.media_type==='external_video'? `<video class="story-viewer-media" src="${escapeHtml(s.media_url)}" autoplay playsinline controls></video>`:`<img class="story-viewer-media" src="${escapeHtml(s.media_url)}" alt="Story">`}<button class="story-tap-zone prev" onclick="stepStory(-1)" aria-label="Previous story"></button><button class="story-tap-zone next" onclick="stepStory(1)" aria-label="Next story"></button><div class="story-caption">${escapeHtml(s.caption||'')}</div><form class="story-reply" onsubmit="event.preventDefault();replyToStory('${s.id}')"><input id="story-reply-input" placeholder="Reply to story…" aria-label="Reply to story" maxlength="2000"><button type="submit">Send</button></form></section>`;
+  b.addEventListener('click',e=>{if(e.target===b)closeStoryViewer()});document.body.appendChild(b);
+  if(CURRENT_USER && s.author_id!==CURRENT_USER.id) await sb.from('social_story_views').insert({story_id:s.id,viewer_id:CURRENT_USER.id});
+  const tracks=b.querySelectorAll('.story-progress-track span');if(tracks[ACTIVE_STORY_INDEX]){tracks[ACTIVE_STORY_INDEX].style.transition='width 5s linear';requestAnimationFrame(()=>tracks[ACTIVE_STORY_INDEX].style.width='100%');}
+  const media=b.querySelector('video');if(media){media.onended=()=>stepStory(1);STORY_TIMER=setTimeout(()=>stepStory(1),Math.max(5000,Math.min(15000,(media.duration||7)*1000)));}else STORY_TIMER=setTimeout(()=>stepStory(1),5000);
+}
+function stepStory(delta){ACTIVE_STORY_INDEX+=delta;if(ACTIVE_STORY_INDEX<0)ACTIVE_STORY_INDEX=0;if(ACTIVE_STORY_INDEX>=ACTIVE_STORIES.length){closeStoryViewer();return;}showStoryAtIndex();}
+function closeStoryViewer(){clearTimeout(STORY_TIMER);document.getElementById('story-viewer-backdrop')?.remove();ACTIVE_STORIES=[];}
+async function replyToStory(storyId){
+  if(!requireAuth())return;const input=document.getElementById('story-reply-input');const body=input?.value.trim();if(!body)return;
+  const {error}=await sb.from('social_story_replies').insert({story_id:storyId,sender_id:CURRENT_USER.id,body});
+  if(error)return toast(error.message);input.value='';toast('Reply sent');
+}
+
+function setProfileGridTab(tab,button){
+ document.querySelectorAll('#view-profile .profile-tabs button').forEach(b=>b.classList.toggle('active',b===button));
+ const grid=document.getElementById('profile-grid');if(!grid)return;
+ grid.innerHTML=(window.__profileGridTabs?.[tab]||'') || emptyHtml(tab==='reels'?'No reels yet':'No posts yet',tab==='reels'?'Your short football videos will appear here.':'Share your first football moment.');
+}
+
+async function sharePlayerProfile(playerId){
+ const url=new URL(window.location.href);url.hash='/public-profile/'+playerId;
+ try{if(navigator.share)await navigator.share({title:'FUSKAMO player profile',url:url.toString()});else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url.toString());toast('Player profile link copied');}else window.prompt('Copy player profile link',url.toString());}catch(e){if(e.name!=='AbortError')toast('Could not share profile');}
+}
+
+function openSearchResult(type,id){
+ if(!id)return;
+ if(type==='player')go('/public-profile/'+id);
+ else if(type==='post')go('/post/'+id);
+ else if(type==='group')go('/group/'+id);
+ else if(type==='scout'||type==='user'||type==='profile')go('/public-profile/'+id);
+ else if(type==='reel')go('/reels');
+ else if(type==='club')go('/scouts');
+ else go('/public-profile/'+id);
+}
+
+async function openStoryHighlight(highlightId){
+ const {data:items,error}=await sb.from('story_highlight_items').select('story_id,position').eq('highlight_id',highlightId).order('position',{ascending:true});
+ if(error||!items?.length)return toast('No stories in this highlight yet');
+ const ids=items.map(x=>x.story_id);
+ const {data:stories}=await sb.from('social_stories').select('id,author_id,media_url,media_type,caption,created_at,expires_at').in('id',ids).eq('status','published').order('created_at',{ascending:true});
+ ACTIVE_STORIES=(stories||[]).sort((x,y)=>ids.indexOf(x.id)-ids.indexOf(y.id));
+ if(!ACTIVE_STORIES.length)return toast('These stories are no longer available to view');
+ ACTIVE_STORY_INDEX=0;showStoryAtIndex();
 }
