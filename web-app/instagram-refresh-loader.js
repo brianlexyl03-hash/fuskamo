@@ -26,6 +26,10 @@
     scriptText = scriptText.replace("rowLink('Your reports','Report history and moderation','/moderation','!')", "rowLink('My reports','Report history and status','/my-reports','!')");
     scriptText = scriptText.replace("const d=settingsRes.data||{};const blocked=", "const d=settingsRes.data||{login_alerts:true,new_device_alerts:true,message_request_filter:true,allow_search_by_email:false,allow_search_by_phone:false};const blocked=");
     scriptText = scriptText.replace("['Followers gained','followers']", "['Followers','followers']");
+    scriptText = scriptText.replace('class="ir-media-heart"', 'class="ir-media-heart dbl-heart"');
+    scriptText = scriptText.replace('class="ir-action ${isLiked?\'liked\':\'\'}"', 'class="ir-action engage-btn ${isLiked?\'liked\':\'\'}"');
+    scriptText = scriptText.replace('<b>${safeCount(post.like_count)} likes</b>', '<b class="ir-like-count" data-count="${safeCount(post.like_count)}">${safeCount(post.like_count)} likes</b>');
+    scriptText = scriptText.replace('>${HEART_SVG(isLiked)}</button>', '>${HEART_SVG(isLiked)}<span class="cnt" hidden>${safeCount(post.like_count)}</span></button>');
     scriptText = scriptText.replace("const totals=Object.fromEntries(keys.map(([label,k])=>[k,rows.reduce((sum,r)=>sum+Number(r[k]||0),0)]));", "const totals=Object.fromEntries(keys.map(([label,k])=>[k,k==='followers'?Number(rows.at(-1)?.[k]||0):rows.reduce((sum,r)=>sum+Number(r[k]||0),0)]));");
     scriptText += `
       ROUTES.push('my-reports');
@@ -42,6 +46,30 @@
           rows.map(r => '<article class="ir-report-card"><div class="ir-report-top"><b>' + esc(r.target_type) + ' report · ' + esc(r.reason) + '</b><span class="ir-report-status status-' + esc(r.status) + '">' + (labels[r.status] || esc(r.status)) + '</span></div><small>Submitted ' + esc(new Date(r.created_at).toLocaleDateString()) + '</small>' + (r.details ? '<p>' + esc(r.details) + '</p>' : '') + (r.resolution ? '<div class="ir-report-resolution"><b>Review update</b><p>' + esc(r.resolution) + '</p></div>' : '') + '</article>').join('') +
           (rows.length ? '' : '<div class="ir-empty"><div class="ir-empty-icon">✓</div><h3>No reports submitted</h3><p>When you report a post, profile, story or message, its review status will appear here.</p></div>') +
           '</section>';
+      };
+      window.togglePostLike = async (postId, button) => {
+        if (!requireAuth()) return;
+        const liked = button.dataset.liked === 'true';
+        const query = liked
+          ? sb.from('social_post_likes').delete().eq('post_id', postId).eq('user_id', CURRENT_USER.id)
+          : sb.from('social_post_likes').insert({ post_id: postId, user_id: CURRENT_USER.id });
+        const { error } = await query;
+        if (error) { toast(error.message); return; }
+        const countNode = button.closest('.ir-post')?.querySelector('.ir-like-count');
+        const current = Number(countNode?.dataset.count || button.querySelector('.cnt')?.textContent || 0);
+        const next = Math.max(0, current + (liked ? -1 : 1));
+        if (countNode) { countNode.dataset.count = String(next); countNode.textContent = next.toLocaleString() + ' likes'; }
+        button.dataset.liked = String(!liked);
+        button.classList.toggle('liked', !liked);
+        button.setAttribute('aria-label', liked ? 'Like' : 'Unlike');
+        button.innerHTML = HEART_SVG(!liked) + '<span class="cnt" hidden>' + next + '</span>';
+      };
+      window.dblTapLike = async (postId, wrapEl) => {
+        if (!requireAuth()) return;
+        const button = wrapEl.closest('.ir-post')?.querySelector('.engage-btn');
+        if (button && button.dataset.liked !== 'true') await window.togglePostLike(postId, button);
+        const heart = wrapEl.querySelector('.dbl-heart');
+        if (heart) { heart.classList.add('pop'); setTimeout(() => heart.classList.remove('pop'), 700); }
       };
     `;
     const style = document.createElement('style');
