@@ -1,13 +1,13 @@
-/* FUSKAMO cinematic intro + restrained spring-physics depth. No audio, no dependency. */
+/* FUSKAMO cinematic intro + restrained spring-physics depth. */
 (() => {
  const intro=document.getElementById('splash'); if(!intro)return; let finished=false;
- const enter=intro.querySelector('#enter-fuskamo'),skip=intro.querySelector('#skip-intro'); let timer;
- const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);intro.classList.add('opening');setTimeout(()=>intro.classList.add('cinema-out','hide'),720);setTimeout(()=>intro.remove(),1700)};
+ const enter=intro.querySelector('#enter-fuskamo'),skip=intro.querySelector('#skip-intro'); let timer,readyTimer;
+ const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);clearTimeout(readyTimer);intro.classList.add('opening');setTimeout(()=>intro.classList.add('cinema-out','hide'),720);setTimeout(()=>intro.remove(),1700)};
  const ready=()=>intro.classList.add('is-ready');
  window.finishCinematicIntro=finish;window.cinematicIntroReady=ready;
  enter?.addEventListener('click',finish);skip?.addEventListener('click',finish);
  window.addEventListener('keydown',e=>{if(!finished&&(e.key==='Escape'||e.key==='Enter'))finish()});
- if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)finish();else timer=setTimeout(finish,8600);
+ if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)finish();else{readyTimer=setTimeout(ready,3400);timer=setTimeout(finish,8600)}
  const stage=intro.querySelector('.cinema-stage');
  if(stage&&window.matchMedia?.('(hover: hover) and (pointer: fine)').matches&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
   let tx=0,ty=0,x=0,y=0,vx=0,vy=0,raf=0;
