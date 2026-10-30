@@ -80,7 +80,7 @@ async function router() {
   if (!CURRENT_USER) { showAuthGate(); return; }
   const { path, param } = parseHash();
   const viewId = 'view-' + path;
-  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
   document.querySelectorAll('.nav-tab').forEach((t) => t.classList.remove('active'));
   if (NAV_TABS[path]) {
     const tab = document.querySelector(`.nav-tab[data-tab="${NAV_TABS[path]}"]`);
@@ -89,11 +89,15 @@ async function router() {
   const el = document.getElementById(viewId);
   if (!el) { go('/feed'); return; }
   el.classList.add('active');
+  // Restart a shallow 3D camera move on every route change.
+  void el.offsetWidth;
+  requestAnimationFrame(() => el.classList.add('screen-arrive'));
   el.innerHTML = '<div class="spinner"></div>';
   document.getElementById('bottom-nav').style.display = 'flex';
   updateNavAvatar();
   try {
     await RENDERERS[path](el, param);
+    window.bindFuskamoDepth?.(el);
   } catch (e) {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg><p>${escapeHtml(e.message || 'Something went wrong loading this screen.')}</p></div>`;
   }
@@ -113,8 +117,11 @@ window.addEventListener('hashchange', router);
 
 // ---------- Auth ----------
 function showAuthGate() {
-  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
-  document.getElementById('view-auth').classList.add('active');
+  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active', 'screen-arrive'));
+  const authView = document.getElementById('view-auth');
+  authView.classList.add('active');
+  void authView.offsetWidth;
+  requestAnimationFrame(() => authView.classList.add('screen-arrive'));
   document.getElementById('bottom-nav').style.display = 'none';
 }
 function setAuthTab(tab) {
@@ -256,7 +263,7 @@ function initAuthParallax() {
   }
   router();
   initAuthParallax();
-  document.getElementById('splash').classList.add('hide');
+  // The cinematic welcome owns its own exit/skip timing; do not hide it on Supabase boot.
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') { CURRENT_USER = null; CURRENT_PROFILE = null; showAuthGate(); }
   });
