@@ -221,7 +221,7 @@ function avatarHtml(url, name, size = '') {
 }
 function badgeHtml(badgeType, verified) {
   if (!verified || !badgeType || badgeType === 'none') return '';
-  return `<span class="badge ${badgeType}">✓ ${badgeType}</span>`;
+  return `<span class="badge verified ${badgeType}">${escapeHtml(badgeType)}</span>`;
 }
 
 // ---------- Boot ----------
@@ -372,7 +372,7 @@ function previewComposerFile() {
   const isVideo = composerFile.type.startsWith('video');
   box.innerHTML = `<div style="position:relative;margin-top:8px">
     ${isVideo ? `<video src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px" controls></video>` : `<img src="${url}" style="width:100%;border-radius:var(--r-sm);max-height:280px;object-fit:cover">`}
-    <button onclick="clearComposerFile()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer">✕</button>
+    <button onclick="clearComposerFile()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer" aria-label="Remove attachment"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   </div>`;
 }
 function clearComposerFile() {
@@ -667,7 +667,7 @@ RENDERERS.scouts = async (el) => {
   if (CURRENT_USER) { const { data } = await sb.from('scouts').select('id,verified').eq('user_id', CURRENT_USER.id).maybeSingle(); myApp = data; }
   el.innerHTML = `<h2 style="margin-bottom:14px">Scouts</h2>
     ${!myApp ? `<div class="card"><p style="margin-bottom:10px">Are you a scout, coach, or club rep?</p><button class="btn secondary" onclick="go('/scout-apply')">Apply as a scout</button></div>`
-      : (myApp.verified ? `<div class="card"><p>✓ You're a verified scout. <a onclick="go('/scout-preferences')" style="color:var(--green);cursor:pointer">Set your preferences →</a></p></div>` : `<div class="card"><p class="muted">Your scout application is under review.</p></div>`)}
+      : (myApp.verified ? `<div class="card"><p><span class="verified-mark">Verified</span> Your scout profile is verified. <a onclick="go('/scout-preferences')" style="color:var(--green);cursor:pointer">Set your preferences →</a></p></div>` : `<div class="card"><p class="muted">Your scout application is under review.</p></div>`)}
     ${(scouts || []).map((s) => `<div class="card row between">
       <div class="row">${avatarHtml(null, s.name)}<div><div style="font-weight:600">${escapeHtml(s.name)}${badgeHtml(s.badge_type, s.verified)}</div><div class="muted">${escapeHtml(s.organization || '')}</div></div></div>
     </div>`).join('') || emptyHtml('No scouts yet', '')}`;
@@ -743,7 +743,7 @@ function groupCard(g, hostIds, profiles) {
     <div class="top">
       <div class="group-avatar">${g.avatar_url ? `<img src="${escapeHtml(g.avatar_url)}">` : initials(g.name)}</div>
       <div style="flex:1">
-        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? ' ✓' : ''}${g.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>` : ''}</div>
+        <div class="group-name-row"><span style="font-weight:700">${escapeHtml(g.name)}</span>${g.verified ? '<span class="verified-mark">Verified</span>' : ''}${g.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>` : ''}</div>
         <div class="muted">${g.host_count} host${g.host_count === 1 ? '' : 's'} · ${g.member_count} members</div>
       </div>
     </div>
@@ -827,7 +827,7 @@ RENDERERS.group = async (el, id) => {
         <div class="group-avatar">${group.avatar_url ? `<img src="${escapeHtml(group.avatar_url)}">` : initials(group.name)}</div>
         ${canInvite ? `<button class="btn-sm secondary" onclick="generateInvite('${id}')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M16 3.5a4 4 0 0 1 0 8M8 12.5a4 4 0 0 1 0-8m0 8l8-8"/></svg>Invite</button>` : ''}
       </div>
-      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? ' ✓' : ''}${group.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${group.privacy}</span>` : ''}</div>
+      <div class="group-name-row"><h2>${escapeHtml(group.name)}</h2>${group.verified ? '<span class="verified-mark">Verified</span>' : ''}${group.privacy !== 'public' ? `<span class="lock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${group.privacy}</span>` : ''}</div>
       <p class="muted">${escapeHtml(group.description || '')}</p>
       <div class="stat-strip"><div class="stat"><b>${group.host_count}</b><span>hosts</span></div><div class="stat"><b>${group.member_count}</b><span>members</span></div><div class="stat"><b>${group.message_count}</b><span>posts</span></div></div>
       <div class="row between" style="margin-top:12px">
@@ -1601,7 +1601,7 @@ RENDERERS['mfa-setup'] = async (el) => {
   const { data: factors } = await sb.auth.mfa.listFactors();
   const verified = (factors?.totp || []).filter((f) => f.status === 'verified');
   if (verified.length) {
-    el.innerHTML = `<h2 style="margin-bottom:14px">Two-Factor Authentication</h2><div class="card"><p>✓ Enabled</p><button class="btn danger btn-sm" style="margin-top:10px" onclick="disableMfa('${verified[0].id}')">Disable</button></div>`;
+    el.innerHTML = `<h2 style="margin-bottom:14px">Two-Factor Authentication</h2><div class="card"><p><span class="verified-mark">Enabled</span> Two-factor authentication</p><button class="btn danger btn-sm" style="margin-top:10px" onclick="disableMfa('${verified[0].id}')">Disable</button></div>`;
     return;
   }
   el.innerHTML = `<h2 style="margin-bottom:14px">Two-Factor Authentication</h2><p class="muted" style="margin-bottom:14px">Add an authenticator app for extra security.</p><button class="btn" onclick="enrollMfa()">Set up 2FA</button><div id="mfa-qr" style="margin-top:16px"></div>`;
