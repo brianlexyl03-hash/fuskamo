@@ -625,17 +625,19 @@ async function runSearch() {
   clearTimeout(searchTimer);
   const q = document.getElementById('search-input').value.trim();
   const out = document.getElementById('search-results');
-  if (!q) { loadExploreGrid(); return; }
+  if (!q) { out.innerHTML = '<div class="explore-grid" id="explore-grid"></div>'; loadExploreGrid(); return; }
   searchTimer = setTimeout(async () => {
     try {
       let results;
       if (SEARCH_CATEGORY === 'players') { const {data}=await sb.from('players').select('id,name,position,country').eq('status','approved').ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:p.name,meta:`${p.position||'Player'} · ${p.country||''}`,type:'player'})); }
-      else if (SEARCH_CATEGORY === 'scouts') { const {data}=await sb.from('scouts').select('id,name,organization').eq('verified',true).ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:p.name,meta:p.organization||'Verified scout',type:'scout'})); }
+      else if (SEARCH_CATEGORY === 'scouts') { const {data}=await sb.from('scouts').select('id,user_id,name,organization').eq('verified',true).ilike('name',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.user_id||p.id,name:p.name,meta:p.organization||'Verified scout',type:'scout'})); }
+      else if (SEARCH_CATEGORY === 'groups') { const {data}=await sb.from('groups').select('id,name,description').ilike('name',`%${q}%`).limit(40); results=(data||[]).map(g=>({id:g.id,name:g.name,meta:g.description||'Football community',type:'group'})); }
+      else if (SEARCH_CATEGORY === 'posts') { const {data}=await sb.from('social_posts').select('id,body').eq('visibility','public').eq('status','published').ilike('body',`%${q}%`).limit(40); results=(data||[]).map(p=>({id:p.id,name:(p.body||'Football post').slice(0,90),meta:'Open post',type:'post'})); }
       else { const response=await backendFetch(`/search?q=${encodeURIComponent(q)}`); results=response.results||[]; }
-      out.innerHTML = results.length ? results.map((r) => `<div class="card row between">
+      out.innerHTML = results.length ? results.map((r) => `<button type="button" class="card row between search-result" onclick="openSearchResult('${escapeHtml(r.type||'')}','${escapeHtml(r.id||r.user_id||'')}')">
           <div><div style="font-weight:600">${escapeHtml(r.name)}</div><div class="muted">${escapeHtml(r.meta || '')}</div></div>
-          <span class="pill">${escapeHtml(r.type)}</span>
-        </div>`).join('') : emptyHtml('No results', 'Try a different search term.');
+          <span class="pill">${escapeHtml(r.type||'result')}</span>
+        </button>`).join('') : emptyHtml('No results', 'Try a different search term.');
     } catch (e) { out.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`; }
   }, 300);
 }
@@ -1734,4 +1736,15 @@ function setProfileGridTab(tab,button){
 async function sharePlayerProfile(playerId){
  const url=new URL(window.location.href);url.hash='/public-profile/'+playerId;
  try{if(navigator.share)await navigator.share({title:'FUSKAMO player profile',url:url.toString()});else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url.toString());toast('Player profile link copied');}else window.prompt('Copy player profile link',url.toString());}catch(e){if(e.name!=='AbortError')toast('Could not share profile');}
+}
+
+function openSearchResult(type,id){
+ if(!id)return;
+ if(type==='player')go('/public-profile/'+id);
+ else if(type==='post')go('/post/'+id);
+ else if(type==='group')go('/group/'+id);
+ else if(type==='scout'||type==='user'||type==='profile')go('/public-profile/'+id);
+ else if(type==='reel')go('/reels');
+ else if(type==='club')go('/scouts');
+ else go('/public-profile/'+id);
 }
