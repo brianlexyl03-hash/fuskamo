@@ -1402,7 +1402,18 @@ function closeProfileMenu() {
 // ---------- PUBLIC PROFILE ----------
 RENDERERS['public-profile'] = async (el, userId) => {
   const { data: p } = await sb.from('profiles').select('*').eq('user_id', userId).maybeSingle();
-  if (!p) { el.innerHTML = emptyHtml('Profile not found', ''); return; }
+  if (!p) {
+    const { data: player, error: playerError } = await sb.from('players').select('*').eq('id',userId).eq('status','approved').maybeSingle();
+    if (playerError || !player) { el.innerHTML = emptyHtml('Profile not found', 'This profile may be private or unavailable.'); return; }
+    el.innerHTML = `<section class="player-profile-card">
+      <div class="player-profile-top"><div class="player-profile-avatar">${escapeHtml(initials(player.name||'Player'))}</div><div><p class="muted">FUSKAMO PLAYER CARD</p><h1>${escapeHtml(player.name)}</h1><p class="muted">${escapeHtml(player.position||'Player')} · ${escapeHtml(player.country||'')}</p><p class="muted">${player.age?escapeHtml(String(player.age))+' years old · ':''}${escapeHtml(player.club||'Independent player')}</p></div></div>
+      <div class="player-profile-stats"><span><b>${escapeHtml(player.position||'—')}</b><small>Position</small></span><span><b>${player.age?escapeHtml(String(player.age)):'—'}</b><small>Age</small></span><span><b>${escapeHtml(player.country||'—')}</b><small>Country</small></span></div>
+      ${player.strengths?`<h3>Playing profile</h3><p>${escapeHtml(player.strengths)}</p>`:''}
+      ${player.video_url?`<h3>Player footage</h3><video src="${escapeHtml(player.video_url)}" controls playsinline style="width:100%;max-height:65vh;background:#000;border-radius:10px"></video>`:''}
+      <div class="row" style="margin-top:18px"><button class="btn" onclick="go('/scouts')">Find scouts</button><button class="btn secondary" onclick="sharePlayerProfile('${player.id}')">Share player</button></div>
+    </section>`;
+    return;
+  }
   let isFollowing = false;
   if (CURRENT_USER) { const { data } = await sb.from('profile_follows').select('*').eq('follower_id', CURRENT_USER.id).eq('followed_id', userId).maybeSingle(); isFollowing = !!data; }
   const { data: posts } = await sb.from('social_posts').select('*').eq('author_id', userId).eq('status', 'published').order('created_at', { ascending: false }).limit(20);
@@ -1717,4 +1728,9 @@ function setProfileGridTab(tab,button){
  document.querySelectorAll('#view-profile .profile-tabs button').forEach(b=>b.classList.toggle('active',b===button));
  const grid=document.getElementById('profile-grid');if(!grid)return;
  grid.innerHTML=(window.__profileGridTabs?.[tab]||'') || emptyHtml(tab==='reels'?'No reels yet':'No posts yet',tab==='reels'?'Your short football videos will appear here.':'Share your first football moment.');
+}
+
+async function sharePlayerProfile(playerId){
+ const url=new URL(window.location.href);url.hash='/public-profile/'+playerId;
+ try{if(navigator.share)await navigator.share({title:'FUSKAMO player profile',url:url.toString()});else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url.toString());toast('Player profile link copied');}else window.prompt('Copy player profile link',url.toString());}catch(e){if(e.name!=='AbortError')toast('Could not share profile');}
 }
