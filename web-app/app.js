@@ -1356,28 +1356,36 @@ RENDERERS.profile = async (el) => {
   const p = CURRENT_PROFILE || {};
   const { count: followers } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('followed_id', CURRENT_USER.id);
   const { count: following } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('follower_id', CURRENT_USER.id);
-  el.innerHTML = `<div class="row between" style="margin-bottom:14px">
-      <div class="row">${avatarHtml(p.avatar_url, p.display_name, 'lg')}
-        <div><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><span class="muted">@${escapeHtml(p.username || 'unset')} · ${p.role}</span></div></div>
-      <button class="icon-btn" onclick="openProfileMenu()" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></button>
-    </div>
-    <p style="margin-bottom:10px">${escapeHtml(p.bio || '')}</p>
-    <div class="row" style="gap:20px;margin-bottom:14px"><span><b>${followers || 0}</b> <span class="muted">followers</span></span><span><b>${following || 0}</b> <span class="muted">following</span></span></div>
-    <div class="grid-2" style="margin-bottom:14px">
-      <button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button>
-      <button class="btn secondary" onclick="go('/analytics')">Analytics</button>
-    </div>
+  const { data: profilePosts } = await sb.from('social_posts').select('id,media_url,media_type,body,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
+  const { data: profileReels } = await sb.from('social_reels').select('id,video_url,thumbnail_url,caption,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
+  const { data: highlights } = await sb.from('story_highlights').select('id,title,cover_url').eq('owner_id',CURRENT_USER.id).order('created_at',{ascending:true});
+  const profileGrid = (profilePosts||[]).filter(x=>x.media_url).map(x=>`<button class="explore-tile" onclick="go('/post/${x.id}')" aria-label="Open post">${x.media_type==='external_video'?'<span class="tile-play">▶</span>':`<img src="${escapeHtml(x.media_url)}" alt="" loading="lazy">`}<span class="tile-meta">${escapeHtml(x.body||'Football post')}</span></button>`).join('');
+  const reelGrid = (profileReels||[]).map(x=>`<button class="explore-tile" onclick="go('/reels')" aria-label="Watch reel">${x.thumbnail_url?`<img src="${escapeHtml(x.thumbnail_url)}" alt="" loading="lazy">`:'<span class="tile-play">▶</span>'}<span class="tile-meta">${escapeHtml(x.caption||'Football reel')}</span></button>`).join('');
+  el.innerHTML = `<section class="profile-header">
+      ${avatarHtml(p.avatar_url, p.display_name, 'lg')}
+      <div class="profile-info"><div class="row between"><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><button class="icon-btn" onclick="openProfileMenu()" aria-label="Profile settings">•••</button></div>
+      <p class="muted">@${escapeHtml(p.username || 'unset')} · ${escapeHtml(p.role||'member')}</p>
+      <div class="profile-stats"><span><b>${(profilePosts||[]).length}</b> posts</span><span><b>${followers || 0}</b> followers</span><span><b>${following || 0}</b> following</span></div>
+      <div class="row profile-actions"><button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button><button class="btn secondary" onclick="go('/analytics')">Professional dashboard</button></div></div>
+    </section>
+    <p class="profile-bio">${escapeHtml(p.bio || '')}</p>
+    <div class="profile-shortcuts"><button onclick="go('/story-settings')"><span class="highlight-circle">+</span><small>New story</small></button>${(highlights||[]).map(h=>`<button onclick="toast('Story highlights viewer is coming next')"><span class="highlight-circle">${h.cover_url?`<img src="${escapeHtml(h.cover_url)}" alt="">`:'+'}</span><small>${escapeHtml(h.title)}</small></button>`).join('')}</div>
+    <div class="profile-tabs"><button class="active" onclick="setProfileGridTab('posts',this)">Posts</button><button onclick="setProfileGridTab('reels',this)">Reels</button><button onclick="go('/analytics')">Insights</button></div>
+    <div class="profile-grid" id="profile-grid">${profileGrid||emptyHtml('No posts yet','Share your first football moment.')}</div>
     <div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div>
-    <div id="profile-menu-sheet" class="menu-sheet">
-      <div class="menu-sheet-handle"></div>
+    <div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>
       ${chev('Account settings', "go('/account-settings');closeProfileMenu()")}
-      ${chev('Security', "go('/security-settings');closeProfileMenu()")}
-      ${chev('New story', "go('/story-settings');closeProfileMenu()")}
+      ${chev('Security and privacy', "go('/security-settings');closeProfileMenu()")}
+      ${chev('Story and close friends', "go('/story-settings');closeProfileMenu()")}
+      ${chev('Groups and communities', "go('/groups');closeProfileMenu()")}
+      ${chev('Scouts and opportunities', "go('/scouts');closeProfileMenu()")}
+      ${chev('Notifications', "go('/notification-preferences');closeProfileMenu()")}
       ${chev('Get verified', "go('/verification');closeProfileMenu()")}
       ${chev('My reports', "go('/moderation');closeProfileMenu()")}
       ${chev('Two-factor authentication', "go('/mfa-setup');closeProfileMenu()")}
       <button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button>
     </div>`;
+  window.__profileGridTabs = {posts: `${profileGrid}`, reels: `${reelGrid}`};
 };
 function chev(label, onclick) {
   return `<div class="settings-link" onclick="${onclick}"><span>${label}</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>`;
@@ -1703,4 +1711,10 @@ async function replyToStory(storyId){
   if(!requireAuth())return;const input=document.getElementById('story-reply-input');const body=input?.value.trim();if(!body)return;
   const {error}=await sb.from('social_story_replies').insert({story_id:storyId,sender_id:CURRENT_USER.id,body});
   if(error)return toast(error.message);input.value='';toast('Reply sent');
+}
+
+function setProfileGridTab(tab,button){
+ document.querySelectorAll('#view-profile .profile-tabs button').forEach(b=>b.classList.toggle('active',b===button));
+ const grid=document.getElementById('profile-grid');if(!grid)return;
+ grid.innerHTML=(window.__profileGridTabs?.[tab]||'') || emptyHtml(tab==='reels'?'No reels yet':'No posts yet',tab==='reels'?'Your short football videos will appear here.':'Share your first football moment.');
 }
