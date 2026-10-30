@@ -27,7 +27,7 @@
     scriptText = scriptText.replace("const d=settingsRes.data||{};const blocked=", "const d=settingsRes.data||{login_alerts:true,new_device_alerts:true,message_request_filter:true,allow_search_by_email:false,allow_search_by_phone:false};const blocked=");
     scriptText = scriptText.replace("['Followers gained','followers']", "['Followers','followers']");
     scriptText = scriptText.replace("const totals=Object.fromEntries(keys.map(([label,k])=>[k,rows.reduce((sum,r)=>sum+Number(r[k]||0),0)]));", "const totals=Object.fromEntries(keys.map(([label,k])=>[k,k==='followers'?Number(rows.at(-1)?.[k]||0):rows.reduce((sum,r)=>sum+Number(r[k]||0),0)]));");
-    scriptText += \`
+    scriptText += `
       ROUTES.push('my-reports');
       RENDERERS['my-reports'] = async (el) => {
         if (!requireAuth()) return;
@@ -43,7 +43,7 @@
           (rows.length ? '' : '<div class="ir-empty"><div class="ir-empty-icon">✓</div><h3>No reports submitted</h3><p>When you report a post, profile, story or message, its review status will appear here.</p></div>') +
           '</section>';
       };
-    \`;
+    `;
     const style = document.createElement('style');
     style.id = 'fuskamo-social-refresh-styles';
     style.textContent = styles + '\n.ir-report-card{padding:15px;margin:10px 0;border:1px solid var(--ir-line);border-radius:12px;background:var(--ir-panel)}.ir-report-top{display:flex;justify-content:space-between;align-items:center;gap:10px}.ir-report-top b{font-size:13px;text-transform:capitalize}.ir-report-card small{display:block;margin-top:6px;color:var(--ir-muted);font-size:10px}.ir-report-card p{font-size:12px;line-height:1.5;color:var(--ir-muted)}.ir-report-status{font-size:10px;padding:5px 8px;border-radius:99px;background:#282d2a;color:#c5cfb0;white-space:nowrap}.ir-report-status.status-resolved{background:#203329;color:#9dd8ae}.ir-report-status.status-dismissed{background:#333;color:#bbb}.ir-report-resolution{padding:9px 11px;border-left:2px solid var(--ir-accent);background:#1b201b}.ir-report-resolution b{font-size:11px}.ir-report-resolution p{margin:4px 0 0}';
