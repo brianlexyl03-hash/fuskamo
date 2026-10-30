@@ -331,6 +331,10 @@ RENDERERS.feed = async (el) => {
     const { data: seen } = await sb.from('social_story_views').select('story_id').eq('viewer_id',CURRENT_USER.id).in('story_id',stories.map(s=>s.id).length?stories.map(s=>s.id):['00000000-0000-0000-0000-000000000000']);
     (seen||[]).forEach(x=>seenStories.add(x.story_id));
   }
+  const { data: suggestionFollows } = await sb.from('profile_follows').select('followed_id').eq('follower_id',CURRENT_USER.id);
+  const followedForSuggestions = new Set((suggestionFollows||[]).map(x=>x.followed_id));
+  const { data: suggestionRows } = await sb.from('profiles').select('user_id,display_name,username,avatar_url,verified,role').neq('user_id',CURRENT_USER.id).limit(24);
+  const suggestionsHtml = (suggestionRows||[]).filter(x=>!followedForSuggestions.has(x.user_id)).slice(0,5).map(p=>`<div class="suggestion">${avatarHtml(p.avatar_url,p.display_name,'sm')}<div class="suggestion-copy"><strong>${escapeHtml(p.username||p.display_name||'Member')}</strong><small>${escapeHtml(p.role||'football community')}</small></div><button onclick="go('/public-profile/${p.user_id}')">View</button></div>`).join('');
   const storyHtml = `<div class="stories-tray" aria-label="Stories">
     <button class="story-bubble" type="button" onclick="go('/story-settings')" aria-label="Add a story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
     ${[...new Map(stories.map(s=>[s.author_id,s])).values()].map(s=>{const p=storyProfiles[s.author_id]||{};const own= s.author_id===CURRENT_USER?.id;return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url? `<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${own?'Your story':escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
@@ -356,7 +360,8 @@ RENDERERS.feed = async (el) => {
         </div>
       </div>
     </div>
-    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>`;
+    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>
+    <aside class="social-suggestions"><div class="suggestion-head"><span>Suggested for you</span><button onclick="go('/discover')">See all</button></div>${suggestionsHtml || '<p class="muted">Follow players, scouts and clubs to build your network.</p>'}<div class="suggestion-links"><button onclick="go('/discover')">Discover players</button><button onclick="go('/scouts')">Find scouts</button><button onclick="go('/groups')">Football groups</button><button onclick="go('/settings')">Settings</button></div><p class="suggestion-footer">FUSKAMO · Football, talent, community</p></aside>`;
   initFeedVideoAutoplay();
 };
 let composerFile = null;
