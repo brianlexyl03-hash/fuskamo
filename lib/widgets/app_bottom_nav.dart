@@ -8,10 +8,10 @@ class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key, required this.currentIndex, required this.onTap});
 
   static const _tabs = <({IconData icon, String label, String tooltip})>[
-    (icon: Icons.home_outlined, label: 'Home', tooltip: 'Home feed'),
-    (icon: Icons.explore_outlined, label: 'Explore', tooltip: 'Explore players and football content'),
-    (icon: Icons.add, label: 'Create', tooltip: 'Create a post, story or reel'),
-    (icon: Icons.chat_bubble_outline, label: 'Messages', tooltip: 'Direct messages'),
+    (icon: Icons.home_filled, label: 'Home', tooltip: 'Home feed'),
+    (icon: Icons.video_collection_outlined, label: 'Reels', tooltip: 'Short football videos'),
+    (icon: Icons.send_outlined, label: 'Direct', tooltip: 'Direct messages'),
+    (icon: Icons.search, label: 'Search', tooltip: 'Explore players and football content'),
     (icon: Icons.person_outline, label: 'Profile', tooltip: 'Your profile'),
   ];
 
@@ -30,7 +30,7 @@ class AppBottomNav extends StatelessWidget {
         children: List.generate(_tabs.length, (index) {
           final tab = _tabs[index];
           final active = index == currentIndex;
-          final isCreate = index == 2;
+          const isCreate = false;
           return Expanded(
             child: Semantics(
               button: true,
