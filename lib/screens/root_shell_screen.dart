@@ -5,23 +5,21 @@ import '../widgets/app_bottom_nav.dart';
 import '../widgets/offline_banner.dart';
 import 'discover_screen.dart';
 import 'feed_screen.dart';
+import 'messages_screen.dart';
 import 'profile_screen.dart';
-import 'groups_screen.dart';
-import 'scouts_screen.dart';
 import 'upload_screen.dart';
 
-/// The single scaffold that hosts all 6 tabs, mirroring the web app's fixed
-/// header/nav + swappable screen area — but using real Flutter navigation
-/// state (IndexedStack) instead of DOM show/hide.
+/// Persistent five-surface shell: Home, Explore, Create, Messages and Profile.
+/// Each tab remains mounted so its scroll position and local UI state survive
+/// tab changes. Reels remain a dedicated vertical destination within Home.
 class RootShellScreen extends StatelessWidget {
   const RootShellScreen({super.key});
 
-  static const _screens = [
+  static const _screens = <Widget>[
     FeedScreen(),
     DiscoverScreen(),
     UploadScreen(),
-    GroupsScreen(),
-    ScoutsScreen(),
+    MessagesScreen(),
     ProfileScreen(),
   ];
 
@@ -34,13 +32,18 @@ class RootShellScreen extends StatelessWidget {
           child: Column(
             children: [
               const OfflineBanner(),
-              Expanded(child: IndexedStack(index: nav.index, children: _screens)),
+              Expanded(
+                child: IndexedStack(
+                  index: nav.index,
+                  children: _screens,
+                ),
+              ),
             ],
           ),
         ),
         bottomNavigationBar: AppBottomNav(
           currentIndex: nav.index,
-          onTap: (i) => nav.setIndex(i),
+          onTap: nav.setIndex,
         ),
       ),
     );
