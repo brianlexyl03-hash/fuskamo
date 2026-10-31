@@ -1,31 +1,42 @@
 const { getSupabaseAdmin } = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
 
-// Public, unauthenticated universal search across the surfaces the web/Flutter
-// clients show in one search box. Read-only, and only returns rows already
-// public per each table's own RLS-equivalent rule (approved players,
-// verified scouts, public groups) since this uses the admin client but we
-// filter to publicly-safe rows explicitly rather than relying on RLS.
+const MAX_QUERY_LENGTH = 100;
+const MAX_RESULTS = 40;
+
+// Search is delegated to the shared, database-side search contract used by
+// the native client. The matching expressions are backed by pg_trgm indexes
+// added in migration 032; the API does not construct unindexed ILIKE scans.
 exports.search = asyncHandler(async (req, res) => {
-  const q = (req.query.q || '').toString().trim().slice(0, 100);
-  if (!q) return res.status(200).json({ success: true, results: [] });
+  const query = String(req.query.q || '').trim().slice(0, MAX_QUERY_LENGTH);
+  if (!query) return res.status(200).json({ success: true, results: [] });
 
   const client = getSupabaseAdmin();
-  if (!client) return res.status(200).json({ success: true, results: [] });
+  if (!client) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'SEARCH_UNAVAILABLE', message: 'Search is temporarily unavailable.' },
+    });
+  }
 
-  const like = `%${q}%`;
+  const { data, error } = await client.rpc('search_fuskamo_v2', {
+    p_query: query,
+    p_limit: MAX_RESULTS,
+  });
 
-  const [players, scouts, groups] = await Promise.all([
-    client.from('players').select('id,name,position,country').eq('status', 'approved').ilike('name', like).limit(8),
-    client.from('scouts').select('id,name,organization').eq('verified', true).ilike('name', like).limit(8),
-    client.from('groups').select('id,name,slug,description').eq('privacy', 'public').ilike('name', like).limit(8),
-  ]);
+  if (error) throw error;
 
-  const results = [
-    ...(players.data || []).map((p) => ({ type: 'Player', id: p.id, name: p.name, meta: p.position })),
-    ...(scouts.data || []).map((s) => ({ type: 'Scout', id: s.id, name: s.name, meta: s.organization })),
-    ...(groups.data || []).map((g) => ({ type: 'Group', id: g.id, name: g.name, meta: g.description })),
-  ];
+  const results = (data || []).map((row) => ({
+    type: row.kind,
+    id: row.id,
+    name: row.title,
+    meta: row.subtitle,
+    username: row.username,
+    avatarUrl: row.avatar_url,
+    verified: Boolean(row.verified),
+    badgeType: row.badge_type,
+    score: Number(row.score || 0),
+  }));
 
-  res.status(200).json({ success: true, results });
+  return res.status(200).json({ success: true, results });
 });
