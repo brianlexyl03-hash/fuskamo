@@ -77,3 +77,15 @@ jobs:
         with:
           name: fuskamo-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
+
+  web-check:
+    name: Web app syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check web app JavaScript
+        working-directory: web-app
+        run: npm test

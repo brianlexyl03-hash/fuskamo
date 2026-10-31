@@ -60,13 +60,13 @@ async function backendFetch(path, { method = 'GET', body, auth = false } = {}) {
 
 // ---------- Router ----------
 const ROUTES = [
-  'feed', 'discover', 'region', 'search', 'upload', 'scouts', 'scout-apply', 'scout-preferences',
+  'feed', 'projects', 'data', 'discover', 'region', 'search', 'upload', 'scouts', 'scout-apply', 'scout-preferences',
   'groups', 'group', 'create-group', 'group-admin', 'messages', 'conversation', 'message-requests',
   'reels', 'scoreboard', 'achievements', 'notifications', 'notification-preferences',
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
   'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post', 'join',
 ];
-const NAV_TABS = { feed: 'feed', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
+const NAV_TABS = { feed: 'feed', projects: 'projects', data: 'data', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
 
 function parseHash() {
   const raw = (location.hash || '#/feed').slice(2); // strip '#/'
@@ -307,7 +307,34 @@ function playerCard(pl) {
   </div>`;
 }
 
+// ---------- PROJECTS: player work, analysis and development showcases ----------
+RENDERERS.projects = async (el) => {
+  const { data: projects, error } = await sb.from('social_posts').select('*')
+    .eq('status','published').eq('visibility','public')
+    .ilike('body','PROJECT — %').order('created_at',{ascending:false}).limit(30);
+  if(error) throw error;
+  const profiles=await fetchProfilesMap((projects||[]).map(p=>p.author_id));
+  el.innerHTML=`<section class="studio-page-head"><div><span class="studio-kicker">FUSKAMO / WORKSPACE</span><h1>Projects, in progress.</h1><p>Player portfolios, coaching plans, match breakdowns and football research — shared by the people doing the work.</p></div><button class="btn" onclick="go('/upload')">Submit a project</button></section>
+    <div class="studio-project-grid">${(projects||[]).map(p=>{const author=profiles[p.author_id]||{};return `<article class="studio-project-card"><div class="studio-project-top"><span class="studio-tag">FIELD NOTE / PROJECT</span><span class="studio-date">${timeAgo(p.created_at)}</span></div><h3>${escapeHtml((p.body||'').replace(/^PROJECT — /,'').split('\n')[0])}</h3><p>${escapeHtml((p.body||'').replace(/^PROJECT — [^\n]*\n?/,'').slice(0,220))}</p>${p.media_url?(p.media_type==='external_video'?'<video controls preload="metadata" src="'+escapeHtml(p.media_url)+'"></video>':'<img loading="lazy" src="'+escapeHtml(p.media_url)+'" alt="Project attachment">'):''}<div class="studio-project-author">${avatarHtml(author.avatar_url,author.display_name,'sm')}<span>${escapeHtml(author.display_name||'FUSKAMO member')}</span></div></article>`}).join('')||emptyHtml('Your next project belongs here','Share a player development plan, scouting report, match analysis or football research project.')}</div>`;
+};
+RENDERERS.data = async (el) => {
+  const [{data:season,error:seasonError},{data:players,error:playerError}] = await Promise.all([
+    sb.from('scoreboard_seasons').select('*').eq('active',true).maybeSingle(),
+    sb.from('players').select('id,name,position,country,club,created_at').eq('status','approved').order('created_at',{ascending:false}).limit(12)
+  ]);
+  if(seasonError) throw seasonError;if(playerError) throw playerError;
+  let rankings=[];
+  if(season){const result=await sb.from('scoreboard_rankings').select('user_id,rank,score').eq('season_id',season.id).order('rank',{ascending:true}).limit(8);if(result.error)throw result.error;rankings=result.data||[];}
+  const profiles=await fetchProfilesMap(rankings.map(r=>r.user_id));
+  const counts=['Goalkeeper','Defender','Midfielder','Forward'].map(position=>({position,count:(players||[]).filter(p=>p.position===position).length}));
+  el.innerHTML=`<section class="studio-page-head"><div><span class="studio-kicker">FUSKAMO / INTELLIGENCE</span><h1>Football, with context.</h1><p>Player discovery, position coverage and community performance — built from FUSKAMO data.</p></div><button class="btn secondary" onclick="go('/discover')">Explore players</button></section>
+    <div class="studio-data-grid"><article class="studio-data-panel studio-data-feature"><span class="studio-kicker">CURRENT SEASON</span><h2>${escapeHtml(season?.name||'Season standings')}</h2><p>${season?'Community leaderboard':'No active season is published yet.'}</p>${rankings.map(r=>`<div class="studio-rank-row"><b>#${r.rank}</b>${avatarHtml(profiles[r.user_id]?.avatar_url,profiles[r.user_id]?.display_name,'sm')}<span>${escapeHtml(profiles[r.user_id]?.display_name||'Member')}</span><strong>${Number(r.score).toFixed(1)}</strong></div>`).join('')||'<p class="muted">Rankings will appear when a season is active.</p>'}</article>
+    <article class="studio-data-panel"><span class="studio-kicker">POSITION SNAPSHOT</span><h2>Talent mix</h2>${counts.map(c=>`<div class="studio-position-row"><span>${c.position}</span><b>${c.count}</b><div><i style="width:${Math.min(100,c.count/Math.max(1,players.length)*100)}%"></i></div></div>`).join('')}<small>Based on the latest 12 approved player profiles.</small></article></div>
+    <section class="studio-recent"><div class="studio-section-title"><h2>Recently submitted talent</h2><a href="#/discover">View all</a></div>${(players||[]).map(p=>`<article class="studio-player-row"><div><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.position||'Player')} · ${escapeHtml(p.country||'Location not listed')}</small></div><span>${escapeHtml(p.club||'Independent')}</span></article>`).join('')||emptyHtml('No approved profiles yet','Player data will appear here after review.')}</section>`;
+};
+
 // ---------- FEED ----------
+
 let SOCIAL_FEED_MODE = 'for-you';
 RENDERERS.feed = async (el) => {
   let followedIds = [];
@@ -628,62 +655,34 @@ async function runSearch() {
 
 // ---------- UPLOAD (player submission) ----------
 RENDERERS.upload = async (el) => {
-  el.innerHTML = `<h2 style="margin-bottom:14px">Submit a Player</h2>
-    <label>Full name</label><input id="up-name">
-    <label>Position</label>
-    <select id="up-position"><option>Goalkeeper</option><option>Defender</option><option>Midfielder</option><option>Forward</option></select>
-    <label>Age</label><input id="up-age" type="number">
-    <label>Country</label><input id="up-country">
-    <label>Club (optional)</label><input id="up-club">
-    <label>Jersey number (optional)</label><input id="up-jersey">
-    <label>Strengths</label><textarea id="up-strengths" rows="3"></textarea>
-    <label for="up-video-file" class="btn secondary" style="cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polygon points="10,9 16,12 10,15"/></svg> Upload footage
-    </label>
-    <input type="file" id="up-video-file" accept="video/*" style="display:none" onchange="previewUploadVideo()">
-    <div id="up-video-preview"></div>
-    <p class="muted" style="margin:-4px 0 10px">or paste a link instead:</p>
-    <input id="up-video" placeholder="https://...">
-    <button class="btn" id="up-submit-btn" onclick="submitPlayer()">Submit for review</button>
-    <p class="muted" style="margin-top:10px">Submissions are reviewed by FUSKAMO before appearing on Discover.</p>`;
+  el.innerHTML=`<section class="studio-submit-wrap"><span class="studio-kicker">FUSKAMO / SUBMIT WORK</span><h1>Put the work out there.</h1><p>Share a player development project, scouting report, coaching plan, match analysis or football research. Attach a video or image if it helps tell the story.</p>
+  <div class="studio-submit-card"><label for="project-title">Project title</label><input id="project-title" maxlength="110" placeholder="e.g. U17 winger development plan">
+  <label for="project-type">Project type</label><select id="project-type"><option>Player development</option><option>Scouting report</option><option>Match analysis</option><option>Coaching project</option><option>Football research / data</option><option>Club or community project</option></select>
+  <label for="project-description">What did you work on?</label><textarea id="project-description" rows="7" maxlength="5000" placeholder="Explain the objective, approach, observations and outcome..."></textarea>
+  <label for="project-file" class="studio-file-pick">Add a video or image</label><input type="file" id="project-file" accept="image/*,video/*" onchange="previewProjectMedia()" style="display:none"><div id="project-media-preview"></div>
+  <label for="project-link">External link (optional)</label><input id="project-link" type="url" placeholder="https://...">
+  <button class="btn" id="project-submit-btn" onclick="submitProject()">Submit project</button><p class="studio-form-note">Your submission is shared as a public project post under your account. Do not upload private player data without permission.</p></div></section>`;
 };
-let uploadVideoFile = null;
-function previewUploadVideo() {
-  uploadVideoFile = document.getElementById('up-video-file').files[0] || null;
-  const box = document.getElementById('up-video-preview');
-  box.innerHTML = uploadVideoFile ? `<video src="${URL.createObjectURL(uploadVideoFile)}" style="width:100%;border-radius:var(--r-sm);max-height:240px;margin-bottom:10px" controls></video>` : '';
+let projectFile=null;
+function previewProjectMedia(){projectFile=document.getElementById('project-file')?.files?.[0]||null;const box=document.getElementById('project-media-preview');if(!box)return;box.innerHTML=projectFile?`<div class="studio-file-name">${escapeHtml(projectFile.name)} · ${(projectFile.size/1048576).toFixed(1)} MB</div>`:'';}
+async function submitProject(){
+ if(!requireAuth())return;
+ const title=document.getElementById('project-title').value.trim();
+ const type=document.getElementById('project-type').value;
+ const description=document.getElementById('project-description').value.trim();
+ const link=document.getElementById('project-link').value.trim();
+ if(!title||!description)return toast('Add a project title and description.');
+ if(link&&!/^https:\/\//i.test(link))return toast('Use a secure https link.');
+ const btn=document.getElementById('project-submit-btn');btn.disabled=true;btn.textContent='Submitting…';
+ try{
+  let mediaUrl=link||null,mediaType='none';
+  if(projectFile){mediaUrl=await uploadToStorage('post-media',projectFile);mediaType=projectFile.type.startsWith('video/')?'external_video':'image';}
+  const body='PROJECT — '+title+'\nType: '+type+'\n'+description+(link?'\nMore: '+link:'');
+  const {error}=await sb.from('social_posts').insert({author_id:CURRENT_USER.id,body,media_url:mediaUrl,media_type:mediaType,visibility:'public'});
+  if(error)throw error;
+  projectFile=null;toast('Project submitted');go('/projects');
+ }catch(error){toast(error.message||'Could not submit project');btn.disabled=false;btn.textContent='Submit project';}
 }
-async function submitPlayer() {
-  const name = document.getElementById('up-name').value.trim();
-  const position = document.getElementById('up-position').value;
-  const age = parseInt(document.getElementById('up-age').value);
-  const country = document.getElementById('up-country').value.trim();
-  if (!name || !age || !country) return toast('Name, age, and country are required.');
-  const btn = document.getElementById('up-submit-btn');
-  btn.disabled = true; btn.textContent = 'Submitting...';
-  try {
-    let videoUrl = document.getElementById('up-video').value.trim() || null;
-    if (uploadVideoFile) {
-      if (!requireAuth()) { btn.disabled = false; btn.textContent = 'Submit for review'; return; }
-      videoUrl = await uploadToStorage('player-videos', uploadVideoFile);
-    }
-    const payload = {
-      name, position, age, country,
-      club: document.getElementById('up-club').value.trim() || null,
-      jersey_number: document.getElementById('up-jersey').value.trim() || null,
-      strengths: document.getElementById('up-strengths').value.trim() || null,
-      video_url: videoUrl,
-      status: 'pending',
-    };
-    if (CURRENT_USER) payload.submitted_by = CURRENT_USER.id;
-    const { error } = await sb.from('players').insert(payload);
-    if (error) throw error;
-    uploadVideoFile = null;
-    toast('Submitted — pending review');
-    go('/profile');
-  } catch (e) { toast(e.message || 'Submission failed'); btn.disabled = false; btn.textContent = 'Submit for review'; }
-}
-
 // ---------- SCOUTS ----------
 RENDERERS.scouts = async (el) => {
   const { data: scouts } = await sb.from('scouts').select('*').eq('verified', true).order('created_at', { ascending: false });
