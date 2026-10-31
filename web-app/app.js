@@ -451,7 +451,7 @@ function openPostShare(postId){
   const url=new URL(window.location.href);url.hash='/post/'+postId;
   document.getElementById('post-share-backdrop')?.remove();
   const backdrop=document.createElement('div');backdrop.id='post-share-backdrop';backdrop.className='create-menu-backdrop';
-  backdrop.innerHTML='<section class="create-menu post-share-menu" role="dialog" aria-modal="true" aria-label="Share post"><h3>Share post</h3><button type="button" id="copy-post-link">Copy link <span>Copy a link to this post</span></button><button type="button" onclick="go(\'/messages\');closePostShare()">Send in a message <span>Open your FUSKAMO inbox</span></button><button type="button" onclick="closePostShare()" style="justify-content:center;color:#aaa">Cancel</button></section>';
+  backdrop.innerHTML='<section class="create-menu post-share-menu" role="dialog" aria-modal="true" aria-label="Share post"><h3>Share post</h3><button type="button" id="copy-post-link">Copy link <span>Copy a link to this post</span></button><button type="button" onclick="closePostShare()" style="justify-content:center;color:#aaa">Cancel</button></section>';
   backdrop.addEventListener('click',event=>{if(event.target===backdrop)closePostShare()});
   document.body.appendChild(backdrop);
   document.getElementById('copy-post-link')?.addEventListener('click',async()=>{
