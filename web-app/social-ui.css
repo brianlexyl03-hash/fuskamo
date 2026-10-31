@@ -491,3 +491,8 @@ label{font-size:13px;color:#c7c7c7}
 .ig-edit-row>span:first-child{display:flex;flex-direction:column;gap:3px}.ig-edit-row small{font-size:12px;color:#777e8a}.ig-edit-row>span:last-child{color:#888f9b;font-size:23px}
 .ig-save-bottom{width:calc(100% - 32px);height:48px;margin:12px 16px 24px;border:0;border-radius:13px;background:var(--accent,#5265ee);color:#fff;font-size:15px;font-weight:650}
 @media(min-width:760px){.ig-profile-top{padding:26px 28px}.ig-profile-identity{grid-template-columns:140px 1fr;gap:32px}.ig-profile-avatar{width:128px;height:128px}.ig-profile-name{margin-top:20px}.ig-profile-grid{gap:4px}.ig-profile-grid .profile-tile{aspect-ratio:1}.ig-edit-fields{padding:0 28px}.ig-edit-photo{padding:30px}}
+
+.ig-edit-note{margin:12px 0 4px;color:#777e8a;font-size:12px;line-height:1.5}
+.ig-photo-pick #ep-avatar-preview{display:block;width:92px;height:92px;border-radius:50%;overflow:hidden}
+.ig-photo-pick #ep-avatar-preview .avatar{width:100%;height:100%;border-radius:50%;overflow:hidden}
+.ig-photo-pick #ep-avatar-preview img{width:100%;height:100%;object-fit:cover}
