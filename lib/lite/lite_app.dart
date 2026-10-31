@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/player_service.dart';
 import '../models/player_model.dart';
+import '../constants/position_constants.dart';
 
 class FuskamoLiteApp extends StatelessWidget {
   const FuskamoLiteApp({super.key});
@@ -85,13 +86,90 @@ class _LiteHomeState extends State<LiteHome> {
   final body = TextEditingController(); bool busy = false;
   Future<List<Map<String,dynamic>>> posts() async { if (!SupabaseService.isReady) return []; final r = await SupabaseService.client.from('social_posts').select('id,body,author_id,created_at,like_count,comment_count').eq('status','published').eq('visibility','public').order('created_at',ascending:false).limit(20); return List<Map<String,dynamic>>.from(r); }
   Future<void> createPost() async { final text=body.text.trim(); if(text.isEmpty) return; setState(()=>busy=true); try { await SupabaseService.client.from('social_posts').insert({'author_id':SupabaseService.client.auth.currentUser!.id,'body':text,'media_type':'none','visibility':'public','status':'published'}); body.clear(); setState((){}); } finally { if(mounted)setState(()=>busy=false); } }
-  @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:()async=>setState((){}),child: CustomScrollView(slivers:[SliverAppBar(title:const Text('FUSKAMO Lite'),floating:true,actions:[IconButton(onPressed:()=>setState((){}),icon:const Icon(Icons.refresh))]),SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.all(12),child:Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[TextField(controller:body,maxLines:3,maxLength:500,decoration:const InputDecoration(hintText:'Share football news or a thought…',border:InputBorder.none)),Align(alignment:Alignment.centerRight,child:FilledButton.icon(onPressed:busy?null:createPost,icon:const Icon(Icons.send),label:const Text('Post')))])))),FutureBuilder<List<Map<String,dynamic>>>(future:posts(),builder:(c,s){if(s.connectionState==ConnectionState.waiting)return const SliverFillRemaining(child:Center(child:CircularProgressIndicator())); final rows=s.data??[]; if(rows.isEmpty)return const SliverFillRemaining(child:Center(child:Text('No posts yet. Be the first.'))); return SliverList.builder(itemCount:rows.length,itemBuilder:(c,i)=>_PostCard(row:rows[i]));})]));
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() {});
+      },
+      child: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            title: const Text('FUSKAMO Lite'),
+            floating: true,
+            actions: [
+              IconButton(
+                onPressed: () => setState(() {}),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: body,
+                        maxLines: 3,
+                        maxLength: 500,
+                        decoration: const InputDecoration(
+                          hintText: 'Share football news or a thought…',
+                          border: InputBorder.none,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.icon(
+                          onPressed: busy ? null : createPost,
+                          icon: const Icon(Icons.send),
+                          label: const Text('Post'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: posts(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return SliverFillRemaining(
+                  child: Center(child: Text('Could not load posts: ${snapshot.error}')),
+                );
+              }
+              final rows = snapshot.data ?? [];
+              if (rows.isEmpty) {
+                return const SliverFillRemaining(
+                  child: Center(child: Text('No posts yet. Be the first.')),
+                );
+              }
+              return SliverList.builder(
+                itemCount: rows.length,
+                itemBuilder: (context, index) => _PostCard(row: rows[index]),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }
 class _PostCard extends StatelessWidget { final Map<String,dynamic> row; const _PostCard({required this.row}); @override Widget build(BuildContext context)=>Card(margin:const EdgeInsets.fromLTRB(12,0,12,10),child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('@${(row['author_id'] as String).substring(0,8)}',style:const TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:8),Text(row['body'] as String),const SizedBox(height:10),Text('♥ ${row['like_count']??0}   💬 ${row['comment_count']??0}',style:Theme.of(context).textTheme.bodySmall)])));
 }
 
 class LiteDiscover extends StatefulWidget { const LiteDiscover({super.key}); @override State<LiteDiscover> createState()=>_LiteDiscoverState(); }
-class _LiteDiscoverState extends State<LiteDiscover>{final q=TextEditingController(); List<Player> players=[]; bool busy=false; Future<void> search()async{setState(()=>busy=true);try{players=await PlayerService().searchApprovedPlayers(q.text);}finally{if(mounted)setState(()=>busy=false);}} @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Discover')),body:Padding(padding:const EdgeInsets.all(12),child:Column(children:[TextField(controller:q,onSubmitted:(_)=>search(),decoration:InputDecoration(hintText:'Search players',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:search,icon:const Icon(Icons.arrow_forward)))),const SizedBox(height:12),Expanded(child:busy?const Center(child:CircularProgressIndicator()):players.isEmpty?const Center(child:Text('Search approved players.')):ListView.builder(itemCount:players.length,itemBuilder:(c,i){final p=players[i];return ListTile(leading:CircleAvatar(child:Text(p.initials)),title:Text(p.name),subtitle:Text('${p.position.dbValue} • ${p.country} • ${p.age}'),trailing:p.isFeatured?const Icon(Icons.star):null);}))])));}
+class _LiteDiscoverState extends State<LiteDiscover>{final q=TextEditingController(); List<Player> players=[]; bool busy=false; Future<void> search()async{setState(()=>busy=true);try{players=await PlayerService().searchApprovedPlayers(q.text);}finally{if(mounted)setState(()=>busy=false);}} @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Discover')),body:Padding(padding:const EdgeInsets.all(12),child:Column(children:[TextField(controller:q,onSubmitted:(_)=>search(),decoration:InputDecoration(hintText:'Search players',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:search,icon:const Icon(Icons.arrow_forward)))),const SizedBox(height:12),Expanded(child:busy?const Center(child:CircularProgressIndicator()):players.isEmpty?const Center(child:Text('Search approved players.')):ListView.builder(itemCount:players.length,itemBuilder:(c,i){final p=players[i];return ListTile(leading:CircleAvatar(child:Text(p.initials)),title:Text(p.name),subtitle:Text('${p.position.label} • ${p.country} • ${p.age}'),trailing:p.isFeatured?const Icon(Icons.star):null);}))])));}
 
 class LiteGroups extends StatefulWidget { const LiteGroups({super.key}); @override State<LiteGroups> createState()=>_LiteGroupsState(); }
 class _LiteGroupsState extends State<LiteGroups>{List<Map<String,dynamic>> groups=[]; bool busy=true; @override void initState(){super.initState();load();} Future<void> load()async{setState(()=>busy=true);try{final r=await SupabaseService.client.from('groups').select('id,name,description,privacy,member_count,verified').eq('privacy','public').order('last_activity_at',ascending:false).limit(30);groups=List<Map<String,dynamic>>.from(r);}catch(_){groups=[];}finally{if(mounted)setState(()=>busy=false);}} @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Groups'),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh))]),body:busy?const Center(child:CircularProgressIndicator()):groups.isEmpty?const Center(child:Text('No public groups yet.')):ListView.builder(itemCount:groups.length,itemBuilder:(c,i){final g=groups[i];return Card(margin:const EdgeInsets.fromLTRB(12,0,12,10),child:ListTile(leading:CircleAvatar(child:Text((g['name'] as String).substring(0,1).toUpperCase())),title:Text(g['name'] as String),subtitle:Text('${g['member_count']??0} members • ${g['description']??''}'),trailing:const Icon(Icons.chevron_right)));}));}
