@@ -629,7 +629,7 @@ async function loadExploreGrid(){
   if(SEARCH_CATEGORY==='scouts'){const {data}=await sb.from('scouts').select('id,name,organization').eq('verified',true).order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(s=>`<button class="explore-tile explore-player" onclick="go('/scouts')"><span>${escapeHtml(s.name)}</span><small>${escapeHtml(s.organization||'Verified scout')}</small></button>`).join('')||emptyHtml('No verified scouts yet','Check back soon.');return;}
   if(SEARCH_CATEGORY==='groups'){const {data}=await sb.from('groups').select('id,name,description').order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(g=>`<button class="explore-tile explore-player" onclick="go('/group/${g.id}')"><span>${escapeHtml(g.name)}</span><small>${escapeHtml(g.description||'Football community')}</small></button>`).join('')||emptyHtml('No groups yet','Football communities will appear here.');return;}
   const {data}=await sb.from('social_posts').select('id,media_url,media_type,body').eq('status','published').eq('visibility','public').not('media_url','is',null).order('created_at',{ascending:false}).limit(24);
-  grid.innerHTML=(data||[]).map(p=>`<button class="explore-tile" onclick="go('/post/${p.id}')" aria-label="Open post"><img src="${escapeHtml(p.media_type==='external_video'?'':p.media_url)}" alt="" loading="lazy">${p.media_type==='external_video'?'<span class="tile-play">▶</span>':''}<span class="tile-meta">${escapeHtml((p.body||'Football post').slice(0,90))}</span></button>`).join('')||emptyHtml('Explore FUSKAMO','Posts and football moments will appear here.');
+  grid.innerHTML=(data||[]).map(p=>{const video=p.media_type==='external_video';const media=video?'<div class="explore-media-fallback" aria-label="Video post"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/></svg></div>':`<img src="${escapeHtml(p.media_url)}" alt="" loading="lazy" decoding="async">`;return `<button class="explore-tile" onclick="go('/post/${p.id}')" aria-label="Open post">${media}<span class="tile-meta">${escapeHtml((p.body||'Football post').slice(0,90))}</span></button>`;}).join('')||emptyHtml('Explore FUSKAMO','Posts and football moments will appear here.');
 };
 let searchTimer;
 async function runSearch() {
@@ -1005,7 +1005,7 @@ RENDERERS.messages = async (el) => {
   el.innerHTML = `
     <section class="dm-shell">
       <header class="dm-header">
-        <div class="dm-title-row"><div><p class="dm-eyebrow">YOUR COMMUNITY</p><h1>Messages</h1></div><button class="dm-compose" onclick="go('/search')" aria-label="Find someone to message"><span aria-hidden="true">＋</span><span>New message</span></button></div>
+        <div class="dm-title-row"><div><p class="dm-eyebrow">YOUR COMMUNITY</p><h1>Messages</h1></div><button class="dm-compose" onclick="go('/search')" aria-label="Find someone to message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New message</span></button></div>
         <label class="dm-search"><span aria-hidden="true">⌕</span><input id="dm-search" type="search" placeholder="Search conversations" autocomplete="off" oninput="filterInbox()"><button id="dm-clear-search" type="button" aria-label="Clear search" onclick="document.getElementById('dm-search').value='';filterInbox()" hidden>×</button></label>
         <div class="dm-tabs" role="tablist" aria-label="Message filters">
           <button class="dm-tab active" role="tab" aria-selected="true" data-filter="all" onclick="setInboxFilter('all',this)">All <span>${items.length}</span></button>
@@ -1729,7 +1729,34 @@ RENDERERS['mfa-setup'] = async (el) => {
 async function enrollMfa() {
   const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp' });
   if (error) return toast(error.message);
-  document.getElementById('mfa-qr').innerHTML = `<div class="card"><img src="${data.totp.qr_code}" style="width:100%;border-radius:8px;margin-bottom:10px"><label>Enter the 6-digit code from your app</label><input id="mfa-code" maxlength="6"><button class="btn btn-sm" onclick="confirmMfa('${data.id}')">Confirm</button></div>`;
+  const mount = document.getElementById('mfa-qr');
+  if (!mount || !data?.totp?.qr_code || !data?.id) return toast('Could not prepare the authenticator setup. Try again.');
+  const card = document.createElement('section');
+  card.className = 'mfa-setup-card';
+  const heading = document.createElement('h3');
+  heading.textContent = 'Scan this code';
+  const description = document.createElement('p');
+  description.textContent = 'Open your authenticator app and scan the QR code below.';
+  const image = document.createElement('img');
+  image.className = 'mfa-qr-image';
+  image.alt = 'Authenticator setup QR code';
+  image.src = data.totp.qr_code;
+  const label = document.createElement('label');
+  label.htmlFor = 'mfa-code';
+  label.textContent = '6-digit verification code';
+  const input = document.createElement('input');
+  input.id = 'mfa-code';
+  input.inputMode = 'numeric';
+  input.autocomplete = 'one-time-code';
+  input.maxLength = 6;
+  input.pattern = '[0-9]{6}';
+  const button = document.createElement('button');
+  button.className = 'btn mfa-confirm';
+  button.type = 'button';
+  button.textContent = 'Verify and enable';
+  button.addEventListener('click', () => confirmMfa(data.id));
+  card.append(heading, description, image, label, input, button);
+  mount.replaceChildren(card);
 }
 async function confirmMfa(factorId) {
   const code = document.getElementById('mfa-code').value.trim();
