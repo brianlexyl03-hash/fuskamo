@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../models/social_models.dart';
 import '../providers/social_provider.dart';
+import '../providers/nav_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import 'package:share_plus/share_plus.dart';
 import 'notifications_screen.dart';
+import 'upload_screen.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -200,12 +202,38 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
     });
   }
 
+  Future<void> _openCreateMenu() async {
+    final choice = await showModalBottomSheet<String>(context: context, backgroundColor: AppColors.surface, builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(leading: const Icon(Icons.add_circle_outline), title: const Text('Story'), subtitle: const Text('Share a moment for 24 hours'), onTap: () => Navigator.pop(sheetContext, 'story')),
+      ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Post'), subtitle: const Text('Share a photo, video or update'), onTap: () => Navigator.pop(sheetContext, 'post')),
+      ListTile(leading: const Icon(Icons.play_circle_outline), title: const Text('Reel'), subtitle: const Text('Create a short football video'), onTap: () => Navigator.pop(sheetContext, 'reel')),
+      ListTile(leading: const Icon(Icons.person_add_alt_1), title: const Text('Submit player'), subtitle: const Text('Add a player profile for review'), onTap: () => Navigator.pop(sheetContext, 'player')),
+    ])));
+    if (!mounted || choice == null) return;
+    if (choice == 'story') await _storyDialog();
+    if (choice == 'reel') context.read<NavProvider>().setIndex(1);
+    if (choice == 'player') await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UploadScreen()));
+    if (choice == 'post') await _postDialog();
+  }
+
+  Future<void> _postDialog() async {
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('Create post'),
+      content: TextField(controller: controller, minLines: 3, maxLines: 6, maxLength: 2200, decoration: const InputDecoration(hintText: 'Share a football moment…')),
+      actions: [TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Share'))],
+    ));
+    final body = controller.text.trim();
+    controller.dispose();
+    if (ok == true && body.isNotEmpty && mounted) await context.read<SocialProvider>().createPost(body);
+  }
+
   Widget _header() => SizedBox(
     height: 54,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(children: [
-        IconButton(onPressed: _storyDialog, icon: const Icon(Icons.add, size: 29, color: AppColors.text), tooltip: 'Create story or post'),
+        IconButton(onPressed: _openCreateMenu, icon: const Icon(Icons.add, size: 29, color: AppColors.text), tooltip: 'Create'),
         const Spacer(),
         Text('FUSKAMO', style: AppTheme.display(27, color: AppColors.text)),
         const Spacer(),
