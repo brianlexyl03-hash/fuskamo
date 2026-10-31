@@ -1516,20 +1516,20 @@ async function messageUser(userId) {
 RENDERERS['edit-profile'] = async (el) => {
   const p=CURRENT_PROFILE||{};
   el.innerHTML='<section class="ig-edit-profile"><header class="ig-edit-header"><button class="ig-back" onclick="go(\'/profile\')" aria-label="Back to profile"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><h1>Edit profile</h1><button class="ig-save" onclick="saveProfile()">Save</button></header>'+
-    '<div class="ig-edit-photo"><label for="ep-avatar-file" class="ig-photo-pick">'+avatarHtml(p.avatar_url,p.display_name,'lg')+'<span>Change photo</span></label><input type="file" id="ep-avatar-file" accept="image/*" hidden onchange="uploadAvatarNow()"><input type="hidden" id="ep-avatar" value="'+escapeHtml(p.avatar_url||'')+'"></div>'+
+    '<div class="ig-edit-photo"><label for="ep-avatar-file" class="ig-photo-pick"><span id="ep-avatar-preview">'+avatarHtml(p.avatar_url,p.display_name,'lg')+'</span><span>Change photo</span></label><input type="file" id="ep-avatar-file" accept="image/*" hidden onchange="uploadAvatarNow()"><input type="hidden" id="ep-avatar" value="'+escapeHtml(p.avatar_url||'')+'"></div>'+
     '<div class="ig-edit-fields">'+
     '<label class="ig-edit-field"><span>Name</span><input id="ep-name" maxlength="80" value="'+escapeHtml(p.display_name||'')+'" autocomplete="name"></label>'+
     '<label class="ig-edit-field"><span>Username</span><input id="ep-username" maxlength="30" value="'+escapeHtml(p.username||'')+'" oninput="checkUsernameAvailable()" autocomplete="username"><small id="ep-username-status"></small></label>'+
     '<label class="ig-edit-field"><span>Pronouns</span><input id="ep-pronouns" maxlength="40" value="'+escapeHtml(p.pronouns||'')+'" placeholder="Add your pronouns"></label>'+
     '<label class="ig-edit-field"><span>Bio</span><textarea id="ep-bio" maxlength="500" rows="3">'+escapeHtml(p.bio||'')+'</textarea></label>'+
     '<div class="ig-edit-section"><div><strong>Links</strong><span>Add links to your profile</span></div><label class="ig-edit-field"><span>Website</span><input id="ep-website" type="url" value="'+escapeHtml(p.website||'')+'" placeholder="https://"></label><label class="ig-edit-field"><span>Instagram</span><input id="ep-instagram" value="'+escapeHtml(p.instagram||'')+'" placeholder="@username"></label></div>'+
-    '<div class="ig-edit-row" onclick="toast(\'Profile banners are managed from your profile highlights.\')"><span><strong>Banners</strong><small>Add featured football moments</small></span><span>›</span></div>'+
+    '<div class="ig-edit-row" onclick="go(\'/story-settings\')"><span><strong>Story highlights</strong><small>Create a story to feature on your profile</small></span><span>›</span></div>'+
     '<label class="ig-edit-field"><span>Gender</span><select id="ep-gender"><option value="">Prefer not to say</option><option value="male" '+(p.gender==='male'?'selected':'')+'>Male</option><option value="female" '+(p.gender==='female'?'selected':'')+'>Female</option><option value="non_binary" '+(p.gender==='non_binary'?'selected':'')+'>Non-binary</option><option value="custom" '+(p.gender==='custom'?'selected':'')+'>Custom</option></select></label>'+
-    '<div class="ig-edit-row" onclick="toast(\'Your post grid is ordered by newest first.\')"><span><strong>Reorder grid</strong><small>Newest posts appear first</small></span><span>›</span></div>'+
+    '<div class="ig-edit-row"><span><strong>Post grid</strong><small>Posts are currently displayed newest first</small></span></div>'+
     '<div class="ig-edit-section"><div><strong>Profile information</strong><span>Manage how your profile is presented</span></div>'+
     '<label class="ig-edit-field"><span>Category</span><select id="ep-category"><option value="">Choose category</option><option value="player" '+(p.profile_category==='player'?'selected':'')+'>Athlete / Player</option><option value="coach" '+(p.profile_category==='coach'?'selected':'')+'>Coach</option><option value="scout" '+(p.profile_category==='scout'?'selected':'')+'>Scout</option><option value="club" '+(p.profile_category==='club'?'selected':'')+'>Club / Team</option><option value="creator" '+(p.profile_category==='creator'?'selected':'')+'>Creator</option></select></label>'+
     '<label class="ig-edit-field"><span>Who can message you</span><select id="ep-msgreq"><option value="everyone" '+(p.message_requests==='everyone'?'selected':'')+'>Everyone</option><option value="followers" '+(p.message_requests==='followers'?'selected':'')+'>Followers</option><option value="nobody" '+(p.message_requests==='nobody'?'selected':'')+'>Nobody</option></select></label>'+
-    '<div class="ig-edit-row" onclick="go(\'/account-settings\')"><span>Contact options</span><span>›</span></div><div class="ig-edit-row" onclick="go(\'/account-settings\')"><span>Action buttons</span><span>›</span></div><div class="ig-edit-row" onclick="go(\'/account-settings\')"><span>Profile display</span><span>›</span></div></div>'+
+    '<p class="ig-edit-note">Your public contact links are managed in the Links section above. Account security and sign-in details are in Account settings.</p></div>'+
     '</div><button class="ig-save-bottom" onclick="saveProfile()">Save changes</button></section>';
 };
 async function uploadAvatarNow() {
@@ -1549,9 +1549,9 @@ function checkUsernameAvailable() {
   const raw = document.getElementById('ep-username').value.trim().toLowerCase();
   const status = document.getElementById('ep-username-status');
   if (!raw) { status.textContent = ''; return; }
-  if (!/^[a-z][a-z0-9_]{2,19}$/.test(raw)) {
+  if (!/^[a-z][a-z0-9_.-]{2,29}$/.test(raw)) {
     status.style.color = 'var(--red)';
-    status.textContent = 'Lowercase letters/numbers/underscore, must start with a letter, 3-20 characters.';
+    status.textContent = 'Use 3–30 lowercase letters, numbers, dots, underscores or hyphens; start with a letter.';
     return;
   }
   status.style.color = 'var(--sub)';
