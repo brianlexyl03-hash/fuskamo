@@ -60,13 +60,13 @@ async function backendFetch(path, { method = 'GET', body, auth = false } = {}) {
 
 // ---------- Router ----------
 const ROUTES = [
-  'feed', 'discover', 'region', 'search', 'upload', 'scouts', 'scout-apply', 'scout-preferences',
+  'feed', 'projects', 'data', 'discover', 'region', 'search', 'upload', 'scouts', 'scout-apply', 'scout-preferences',
   'groups', 'group', 'create-group', 'group-admin', 'messages', 'conversation', 'message-requests',
   'reels', 'scoreboard', 'achievements', 'notifications', 'notification-preferences',
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
   'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post', 'join',
 ];
-const NAV_TABS = { feed: 'feed', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
+const NAV_TABS = { feed: 'feed', projects: 'projects', data: 'data', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
 
 function parseHash() {
   const raw = (location.hash || '#/feed').slice(2); // strip '#/'
