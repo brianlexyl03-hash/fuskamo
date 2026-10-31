@@ -87,6 +87,11 @@ async function router() {
     const tab = document.querySelector(`.nav-tab[data-tab="${NAV_TABS[path]}"]`);
     if (tab) tab.classList.add('active');
   }
+  const pageTitles = {feed:'The work speaks.',discover:'Find the next difference-maker.',search:'Explore the football network.',upload:'Put your work on record.',reels:'Watch the work.',profile:'Your football portfolio.',messages:'Conversations that move things forward.',scouts:'People who spot potential.',groups:'Build your football circle.',notifications:'Your latest updates.'};
+  const heading = document.getElementById('workspace-title');
+  const pageHeading = document.querySelector('.workspace-heading');
+  if (heading) heading.textContent = pageTitles[path] || 'Your football workspace.';
+  if (pageHeading) pageHeading.style.display = path === 'feed' || path === 'discover' || path === 'search' || path === 'upload' ? 'flex' : 'none';
   const el = document.getElementById(viewId);
   if (!el) { go('/feed'); return; }
   el.classList.add('active');
@@ -628,25 +633,87 @@ async function runSearch() {
 
 // ---------- UPLOAD (player submission) ----------
 RENDERERS.upload = async (el) => {
-  el.innerHTML = `<h2 style="margin-bottom:14px">Submit a Player</h2>
-    <label>Full name</label><input id="up-name">
-    <label>Position</label>
-    <select id="up-position"><option>Goalkeeper</option><option>Defender</option><option>Midfielder</option><option>Forward</option></select>
-    <label>Age</label><input id="up-age" type="number">
-    <label>Country</label><input id="up-country">
-    <label>Club (optional)</label><input id="up-club">
-    <label>Jersey number (optional)</label><input id="up-jersey">
-    <label>Strengths</label><textarea id="up-strengths" rows="3"></textarea>
-    <label for="up-video-file" class="btn secondary" style="cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polygon points="10,9 16,12 10,15"/></svg> Upload footage
-    </label>
-    <input type="file" id="up-video-file" accept="video/*" style="display:none" onchange="previewUploadVideo()">
-    <div id="up-video-preview"></div>
-    <p class="muted" style="margin:-4px 0 10px">or paste a link instead:</p>
-    <input id="up-video" placeholder="https://...">
-    <button class="btn" id="up-submit-btn" onclick="submitPlayer()">Submit for review</button>
-    <p class="muted" style="margin-top:10px">Submissions are reviewed by FUSKAMO before appearing on Discover.</p>`;
+  el.innerHTML = `
+    <div class="project-submit-shell">
+      <div class="project-submit-intro"><p class="eyebrow">CONTRIBUTE TO THE GAME</p><h2>Put your work on record.</h2><p class="muted">Submit a project, match clip, training session or performance breakdown. Build a portfolio that shows what you can do.</p></div>
+      <div class="project-type-switch" role="group" aria-label="Project type"><button type="button" class="active" data-project-kind="video" onclick="setProjectKind('video',this)">Video project</button><button type="button" data-project-kind="data" onclick="setProjectKind('data',this)">Performance data</button><button type="button" data-project-kind="analysis" onclick="setProjectKind('analysis',this)">Match analysis</button></div>
+      <div class="project-form-card">
+        <label for="project-title">Project title</label><input id="project-title" maxlength="120" placeholder="e.g. Matchday performance — U18 league">
+        <label for="project-description">What are you submitting?</label><textarea id="project-description" rows="4" maxlength="3000" placeholder="Describe the work, context, role and what you want reviewers to notice."></textarea>
+        <div class="project-form-grid"><div><label for="project-role">Position / discipline</label><select id="project-role"><option value="">Choose a position</option><option>Goalkeeper</option><option>Defender</option><option>Midfielder</option><option>Forward</option><option>Coach</option><option>Analyst</option></select></div><div><label for="project-level">Competition level</label><input id="project-level" placeholder="Academy, school, semi-pro…"></div></div>
+        <div id="project-video-fields"><label>Video or evidence file</label><label class="project-dropzone" for="project-file"><span class="project-drop-icon">↥</span><strong id="project-file-label">Choose video or image</strong><small>Upload a clip, training footage, match evidence or a project visual</small></label><input id="project-file" type="file" accept="video/*,image/*" hidden onchange="previewProjectFile()"><div id="project-file-preview"></div><label for="project-link">Or add an external video / project link</label><input id="project-link" type="url" placeholder="https://…"></div>
+        <div id="project-data-fields" hidden><p class="eyebrow">PERFORMANCE SNAPSHOT</p><div class="project-form-grid"><div><label for="project-minutes">Minutes played</label><input id="project-minutes" type="number" min="0" max="150" placeholder="90"></div><div><label for="project-distance">Distance covered (km)</label><input id="project-distance" type="number" min="0" step=".1" placeholder="10.8"></div><div><label for="project-passes">Passes completed</label><input id="project-passes" type="number" min="0" placeholder="42"></div><div><label for="project-goals">Goals / assists</label><input id="project-goals" placeholder="2 goals, 1 assist"></div><div><label for="project-date">Match / session date</label><input id="project-date" type="date"></div><div><label for="project-opponent">Opponent / event</label><input id="project-opponent" placeholder="Team or event"></div></div><p class="muted">Only submit statistics you can support. FUSKAMO does not independently verify user-entered match data.</p></div>
+        <div class="project-form-grid"><div><label for="project-team">Club / team</label><input id="project-team" placeholder="Club or academy"></div><div><label for="project-location">Location</label><input id="project-location" placeholder="City, country"></div></div>
+        <div class="project-submit-footer"><p class="muted">Your submission is shared with your football network under your account's visibility settings.</p><button class="btn" id="project-submit-btn" onclick="submitFootballProject()">Submit project <span>↗</span></button></div>
+      </div>
+    </div>`;
 };
+let activeProjectKind = 'video';
+let projectUploadFile = null;
+function setProjectKind(kind, button) {
+  activeProjectKind = kind;
+  document.querySelectorAll('[data-project-kind]').forEach((item) => item.classList.toggle('active', item === button));
+  const data = document.getElementById('project-data-fields');
+  const video = document.getElementById('project-video-fields');
+  if (data) data.hidden = kind === 'video';
+  if (video) video.hidden = kind === 'data';
+  if (kind === 'analysis' && data) data.hidden = false;
+}
+function previewProjectFile() {
+  const input = document.getElementById('project-file');
+  projectUploadFile = input.files?.[0] || null;
+  const label = document.getElementById('project-file-label');
+  const preview = document.getElementById('project-file-preview');
+  if (label) label.textContent = projectUploadFile ? projectUploadFile.name : 'Choose video or image';
+  if (!preview) return;
+  if (!projectUploadFile) { preview.innerHTML = ''; return; }
+  const url = URL.createObjectURL(projectUploadFile);
+  preview.innerHTML = projectUploadFile.type.startsWith('video')
+    ? `<video src="${url}" controls playsinline class="project-preview-media"></video>`
+    : `<img src="${url}" alt="Project preview" class="project-preview-media">`;
+}
+async function submitFootballProject() {
+  if (!requireAuth()) return;
+  const title = document.getElementById('project-title').value.trim();
+  const description = document.getElementById('project-description').value.trim();
+  if (!title || (!description && !projectUploadFile && !document.getElementById('project-link').value.trim())) return toast('Add a title and project details or evidence.');
+  const button = document.getElementById('project-submit-btn');
+  button.disabled = true; button.textContent = 'Submitting…';
+  try {
+    let mediaUrl = document.getElementById('project-link').value.trim() || null;
+    let mediaType = mediaUrl ? 'external_video' : 'none';
+    if (projectUploadFile) {
+      mediaUrl = await uploadToStorage('post-media', projectUploadFile);
+      mediaType = projectUploadFile.type.startsWith('video') ? 'external_video' : 'image';
+    }
+    const dataFields = activeProjectKind === 'video' ? [] : [
+      ['Minutes', 'project-minutes'], ['Distance (km)', 'project-distance'],
+      ['Passes', 'project-passes'], ['Goals / assists', 'project-goals'],
+      ['Date', 'project-date'], ['Opponent / event', 'project-opponent']
+    ].map(([label, id]) => [label, document.getElementById(id)?.value?.trim()]).filter(([, value]) => value);
+    const metadata = [
+      'PROJECT: ' + title,
+      'TYPE: ' + activeProjectKind,
+      ['Position', document.getElementById('project-role').value],
+      ['Level', document.getElementById('project-level').value.trim()],
+      ['Team', document.getElementById('project-team').value.trim()],
+      ['Location', document.getElementById('project-location').value.trim()],
+      ...dataFields
+    ].filter((entry) => Array.isArray(entry) ? entry[1] : true)
+      .map((entry) => Array.isArray(entry) ? entry.join(': ') : entry);
+    const body = metadata.join(' · ') + '\\n\\n' + description;
+    const { error } = await sb.from('social_posts').insert({
+      author_id: CURRENT_USER.id, body, media_url: mediaUrl, media_type: mediaType
+    });
+    if (error) throw error;
+    projectUploadFile = null;
+    toast('Project submitted to your FUSKAMO network');
+    go('/feed');
+  } catch (error) {
+    toast(error.message || 'Project submission failed');
+    button.disabled = false; button.textContent = 'Submit project ↗';
+  }
+}
 let uploadVideoFile = null;
 function previewUploadVideo() {
   uploadVideoFile = document.getElementById('up-video-file').files[0] || null;
