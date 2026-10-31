@@ -1417,39 +1417,41 @@ async function saveNotifPrefs() {
 RENDERERS.profile = async (el) => {
   if (!requireAuth()) { showAuthGate(); return; }
   const p = CURRENT_PROFILE || {};
-  const { count: followers } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('followed_id', CURRENT_USER.id);
-  const { count: following } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('follower_id', CURRENT_USER.id);
-  const { data: profilePosts } = await sb.from('social_posts').select('id,media_url,media_type,body,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
-  const { data: profileReels } = await sb.from('social_reels').select('id,video_url,thumbnail_url,caption,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
-  const { data: highlights } = await sb.from('story_highlights').select('id,title,cover_url').eq('owner_id',CURRENT_USER.id).order('created_at',{ascending:true});
-  const profileGrid = (profilePosts||[]).filter(x=>x.media_url).map(x=>`<button class="explore-tile" onclick="go('/post/${x.id}')" aria-label="Open post">${x.media_type==='external_video'?'<span class="tile-play">▶</span>':`<img src="${escapeHtml(x.media_url)}" alt="" loading="lazy">`}<span class="tile-meta">${escapeHtml(x.body||'Football post')}</span></button>`).join('');
-  const reelGrid = (profileReels||[]).map(x=>`<button class="explore-tile" onclick="go('/reels')" aria-label="Watch reel">${x.thumbnail_url?`<img src="${escapeHtml(x.thumbnail_url)}" alt="" loading="lazy">`:'<span class="tile-play">▶</span>'}<span class="tile-meta">${escapeHtml(x.caption||'Football reel')}</span></button>`).join('');
-  el.innerHTML = `<section class="profile-header">
-      ${avatarHtml(p.avatar_url, p.display_name, 'lg')}
-      <div class="profile-info"><div class="row between"><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><button class="icon-btn" onclick="openProfileMenu()" aria-label="Profile settings">•••</button></div>
-      <p class="muted">@${escapeHtml(p.username || 'unset')} · ${escapeHtml(p.role||'member')}</p>
-      <div class="profile-stats"><span><b>${(profilePosts||[]).length}</b> posts</span><span><b>${followers || 0}</b> followers</span><span><b>${following || 0}</b> following</span></div>
-      <div class="row profile-actions"><button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button><button class="btn secondary" onclick="go('/analytics')">Professional dashboard</button></div></div>
-    </section>
-    <p class="profile-bio">${escapeHtml(p.bio || '')}</p>
-    <div class="profile-shortcuts"><button onclick="go('/story-settings')"><span class="highlight-circle">+</span><small>New story</small></button>${(highlights||[]).map(h=>`<button onclick="openStoryHighlight('${h.id}')"><span class="highlight-circle">${h.cover_url?`<img src="${escapeHtml(h.cover_url)}" alt="">`:'+'}</span><small>${escapeHtml(h.title)}</small></button>`).join('')}</div>
-    <div class="profile-tabs"><button class="active" onclick="setProfileGridTab('posts',this)">Posts</button><button onclick="setProfileGridTab('reels',this)">Reels</button><button onclick="go('/analytics')">Insights</button></div>
-    <div class="profile-grid" id="profile-grid">${profileGrid||emptyHtml('No posts yet','Share your first football moment.')}</div>
-    <div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div>
-    <div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>
-      ${chev('Account settings', "go('/account-settings');closeProfileMenu()")}
-      ${chev('Security and privacy', "go('/security-settings');closeProfileMenu()")}
-      ${chev('Create story', "go('/story-settings');closeProfileMenu()")}
-      ${chev('Groups and communities', "go('/groups');closeProfileMenu()")}
-      ${chev('Scouts and opportunities', "go('/scouts');closeProfileMenu()")}
-      ${chev('Notifications', "go('/notification-preferences');closeProfileMenu()")}
-      ${chev('Get verified', "go('/verification');closeProfileMenu()")}
-      ${chev('My reports', "go('/my-reports');closeProfileMenu()")}
-      ${chev('Two-factor authentication', "go('/mfa-setup');closeProfileMenu()")}
-      <button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button>
-    </div>`;
-  window.__profileGridTabs = {posts: `${profileGrid}`, reels: `${reelGrid}`};
+  const [followersResult, followingResult, postsResult, reelsResult, highlightsResult] = await Promise.all([
+    sb.from('profile_follows').select('*',{count:'exact',head:true}).eq('followed_id',CURRENT_USER.id),
+    sb.from('profile_follows').select('*',{count:'exact',head:true}).eq('follower_id',CURRENT_USER.id),
+    sb.from('social_posts').select('id,media_url,media_type,body,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(60),
+    sb.from('social_reels').select('id,video_url,thumbnail_url,caption,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(60),
+    sb.from('story_highlights').select('id,title,cover_url').eq('owner_id',CURRENT_USER.id).order('created_at',{ascending:true})
+  ]);
+  const followers=followersResult.count||0, following=followingResult.count||0;
+  const posts=postsResult.data||[], reels=reelsResult.data||[], highlights=highlightsResult.data||[];
+  const displayName=escapeHtml(p.display_name||'FUSKAMO Member'), username=escapeHtml(p.username||'');
+  const linkRows=[p.website,p.instagram?('https://instagram.com/'+String(p.instagram).replace(/^@/,'')):null,p.tiktok?('https://tiktok.com/@'+String(p.tiktok).replace(/^@/,'')):null].filter(Boolean);
+  const linkHtml=linkRows.map(url=>{const safe=escapeHtml(url);return '<a class="profile-link" href="'+safe+'" target="_blank" rel="noopener noreferrer">'+safe.replace(/^https?:\/\//,'').replace(/\/$/,'')+'</a>';}).join('');
+  const profileGrid=posts.filter(x=>x.media_url).map(x=>'<button class="profile-tile" onclick="go(\'/post/'+x.id+'\')" aria-label="Open post">'+(x.media_type==='external_video'?'<span class="profile-video-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z"/></svg></span>':'<img src="'+escapeHtml(x.media_url)+'" alt="" loading="lazy" decoding="async">')+'<span class="profile-tile-caption">'+escapeHtml(x.body||'Football moment')+'</span></button>').join('');
+  const reelGrid=reels.map(x=>'<button class="profile-tile" onclick="go(\'/reels\')" aria-label="Watch reel">'+(x.thumbnail_url?'<img src="'+escapeHtml(x.thumbnail_url)+'" alt="" loading="lazy" decoding="async">':'<span class="profile-video-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z"/></svg></span>')+'<span class="profile-tile-caption">'+escapeHtml(x.caption||'Football reel')+'</span></button>').join('');
+  const avatar=avatarHtml(p.avatar_url,p.display_name,'lg');
+  el.innerHTML='<section class="ig-profile">'+
+    '<header class="ig-profile-top"><div class="ig-profile-identity"><div class="ig-profile-avatar">'+avatar+'</div><div class="ig-profile-stats"><span><b>'+posts.length+'</b><small>posts</small></span><span><b>'+followers+'</b><small>followers</small></span><span><b>'+following+'</b><small>following</small></span></div></div>'+
+    '<div class="ig-profile-name"><strong>'+displayName+badgeHtml(p.badge_type,p.verified)+'</strong><span>@'+username+'</span></div>'+
+    (p.role?'<div class="ig-profile-category">'+escapeHtml(p.role)+'</div>':'')+
+    (p.bio?'<p class="ig-profile-bio">'+escapeHtml(p.bio)+'</p>':'')+
+    (linkHtml?'<div class="ig-profile-links">'+linkHtml+'</div>':'')+
+    '<div class="ig-profile-actions"><button class="ig-profile-action primary" onclick="go(\'/edit-profile\')">Edit profile</button><button class="ig-profile-action" onclick="shareOwnProfile()">Share profile</button></div>'+
+    '<button class="ig-dashboard" onclick="go(\'/analytics\')"><strong>Your dashboard</strong><span>View your professional insights</span></button></header>'+
+    '<div class="ig-highlights">'+(highlights.map(h=>'<button class="ig-highlight" onclick="openStoryHighlight(\''+h.id+'\')"><span>'+(h.cover_url?'<img src="'+escapeHtml(h.cover_url)+'" alt="">':'<span class="ig-highlight-empty">+</span>')+'</span><small>'+escapeHtml(h.title)+'</small></button>').join(''))+'<button class="ig-highlight" onclick="go(\'/story-settings\')"><span class="ig-highlight-empty">+</span><small>New</small></button></div>'+
+    '<nav class="ig-profile-tabs" aria-label="Profile content"><button class="active" data-grid="posts" onclick="setProfileGridTab(\'posts\',this)" aria-label="Posts"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button><button data-grid="reels" onclick="setProfileGridTab(\'reels\',this)" aria-label="Reels"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m10 8 6 4-6 4z"/></svg></button><button onclick="go(\'/saved\')" aria-label="Saved posts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg></button></nav>'+
+    '<div class="ig-profile-grid" id="profile-grid">'+(profileGrid||emptyHtml('No posts yet','Your football moments will appear here.'))+'</div>'+
+    '<div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div><div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>'+
+    chev('Account settings',"go('/account-settings');closeProfileMenu()")+chev('Security and privacy',"go('/security-settings');closeProfileMenu()")+chev('Create story',"go('/story-settings');closeProfileMenu()")+chev('Groups and communities',"go('/groups');closeProfileMenu()")+chev('Scouts and opportunities',"go('/scouts');closeProfileMenu()")+chev('Notifications',"go('/notification-preferences');closeProfileMenu()")+chev('Get verified',"go('/verification');closeProfileMenu()")+'<button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button></div></section>';
+  window.__profileGridTabs={posts:profileGrid,reels:reelGrid};
 };
+function shareOwnProfile(){
+ const url=location.origin+location.pathname+'#/profile';
+ if(navigator.clipboard?.writeText){navigator.clipboard.writeText(url).then(()=>toast('Profile link copied')).catch(()=>toast('Could not copy profile link'));}
+ else toast(url);
+}
 function chev(label, onclick) {
   return `<div class="settings-link" onclick="${onclick}"><span>${label}</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>`;
 }
@@ -1512,25 +1514,23 @@ async function messageUser(userId) {
 
 // ---------- EDIT PROFILE ----------
 RENDERERS['edit-profile'] = async (el) => {
-  const p = CURRENT_PROFILE || {};
-  el.innerHTML = `<h2 style="margin-bottom:14px">Edit Profile</h2>
-    <div style="text-align:center;margin-bottom:16px">
-      <label for="ep-avatar-file" style="cursor:pointer;display:inline-block;position:relative">
-        <div id="ep-avatar-preview">${avatarHtml(p.avatar_url, p.display_name, 'lg')}</div>
-        <div style="position:absolute;bottom:0;right:0;background:var(--green);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid var(--black)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--black)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg></div>
-      </label>
-      <input type="file" id="ep-avatar-file" accept="image/*" style="display:none" onchange="uploadAvatarNow()">
-      <p class="muted" style="margin-top:6px">Tap to change photo</p>
-    </div>
-    <label>Display name</label><input id="ep-name" value="${escapeHtml(p.display_name || '')}">
-    <label>Username</label><input id="ep-username" value="${escapeHtml(p.username || '')}" oninput="checkUsernameAvailable()" placeholder="lowercase, starts with a letter">
-    <p class="muted" id="ep-username-status" style="margin:-6px 0 10px"></p>
-    <label>Bio</label><textarea id="ep-bio" rows="3">${escapeHtml(p.bio || '')}</textarea>
-    <input type="hidden" id="ep-avatar" value="${escapeHtml(p.avatar_url || '')}">
-    <label>Website</label><input id="ep-website" value="${escapeHtml(p.website || '')}">
-    <label>Instagram</label><input id="ep-instagram" value="${escapeHtml(p.instagram || '')}">
-    <label>Who can message you</label><select id="ep-msgreq"><option value="everyone" ${p.message_requests === 'everyone' ? 'selected' : ''}>Everyone</option><option value="followers" ${p.message_requests === 'followers' ? 'selected' : ''}>Followers</option><option value="nobody" ${p.message_requests === 'nobody' ? 'selected' : ''}>Nobody</option></select>
-    <button class="btn" onclick="saveProfile()">Save</button>`;
+  const p=CURRENT_PROFILE||{};
+  el.innerHTML='<section class="ig-edit-profile"><header class="ig-edit-header"><button class="ig-back" onclick="go(\'/profile\')" aria-label="Back to profile"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><h1>Edit profile</h1><button class="ig-save" onclick="saveProfile()">Save</button></header>'+
+    '<div class="ig-edit-photo"><label for="ep-avatar-file" class="ig-photo-pick">'+avatarHtml(p.avatar_url,p.display_name,'lg')+'<span>Change photo</span></label><input type="file" id="ep-avatar-file" accept="image/*" hidden onchange="uploadAvatarNow()"><input type="hidden" id="ep-avatar" value="'+escapeHtml(p.avatar_url||'')+'"></div>'+
+    '<div class="ig-edit-fields">'+
+    '<label class="ig-edit-field"><span>Name</span><input id="ep-name" maxlength="80" value="'+escapeHtml(p.display_name||'')+'" autocomplete="name"></label>'+
+    '<label class="ig-edit-field"><span>Username</span><input id="ep-username" maxlength="30" value="'+escapeHtml(p.username||'')+'" oninput="checkUsernameAvailable()" autocomplete="username"><small id="ep-username-status"></small></label>'+
+    '<label class="ig-edit-field"><span>Pronouns</span><input id="ep-pronouns" maxlength="40" value="'+escapeHtml(p.pronouns||'')+'" placeholder="Add your pronouns"></label>'+
+    '<label class="ig-edit-field"><span>Bio</span><textarea id="ep-bio" maxlength="500" rows="3">'+escapeHtml(p.bio||'')+'</textarea></label>'+
+    '<div class="ig-edit-section"><div><strong>Links</strong><span>Add links to your profile</span></div><label class="ig-edit-field"><span>Website</span><input id="ep-website" type="url" value="'+escapeHtml(p.website||'')+'" placeholder="https://"></label><label class="ig-edit-field"><span>Instagram</span><input id="ep-instagram" value="'+escapeHtml(p.instagram||'')+'" placeholder="@username"></label></div>'+
+    '<div class="ig-edit-row" onclick="toast(\'Profile banners are managed from your profile highlights.\')"><span><strong>Banners</strong><small>Add featured football moments</small></span><span>›</span></div>'+
+    '<label class="ig-edit-field"><span>Gender</span><select id="ep-gender"><option value="">Prefer not to say</option><option value="male" '+(p.gender==='male'?'selected':'')+'>Male</option><option value="female" '+(p.gender==='female'?'selected':'')+'>Female</option><option value="non_binary" '+(p.gender==='non_binary'?'selected':'')+'>Non-binary</option><option value="custom" '+(p.gender==='custom'?'selected':'')+'>Custom</option></select></label>'+
+    '<div class="ig-edit-row" onclick="toast(\'Your post grid is ordered by newest first.\')"><span><strong>Reorder grid</strong><small>Newest posts appear first</small></span><span>›</span></div>'+
+    '<div class="ig-edit-section"><div><strong>Profile information</strong><span>Manage how your profile is presented</span></div>'+
+    '<label class="ig-edit-field"><span>Category</span><select id="ep-category"><option value="">Choose category</option><option value="player" '+(p.profile_category==='player'?'selected':'')+'>Athlete / Player</option><option value="coach" '+(p.profile_category==='coach'?'selected':'')+'>Coach</option><option value="scout" '+(p.profile_category==='scout'?'selected':'')+'>Scout</option><option value="club" '+(p.profile_category==='club'?'selected':'')+'>Club / Team</option><option value="creator" '+(p.profile_category==='creator'?'selected':'')+'>Creator</option></select></label>'+
+    '<label class="ig-edit-field"><span>Who can message you</span><select id="ep-msgreq"><option value="everyone" '+(p.message_requests==='everyone'?'selected':'')+'>Everyone</option><option value="followers" '+(p.message_requests==='followers'?'selected':'')+'>Followers</option><option value="nobody" '+(p.message_requests==='nobody'?'selected':'')+'>Nobody</option></select></label>'+
+    '<div class="ig-edit-row" onclick="go(\'/account-settings\')"><span>Contact options</span><span>›</span></div><div class="ig-edit-row" onclick="go(\'/account-settings\')"><span>Action buttons</span><span>›</span></div><div class="ig-edit-row" onclick="go(\'/account-settings\')"><span>Profile display</span><span>›</span></div></div>'+
+    '</div><button class="ig-save-bottom" onclick="saveProfile()">Save changes</button></section>';
 };
 async function uploadAvatarNow() {
   if (!requireAuth()) return;
@@ -1563,25 +1563,12 @@ function checkUsernameAvailable() {
   }, 400);
 }
 async function saveProfile() {
-  const payload = {
-    display_name: document.getElementById('ep-name').value.trim(),
-    username: document.getElementById('ep-username').value.trim().toLowerCase() || null,
-    bio: document.getElementById('ep-bio').value.trim(),
-    avatar_url: document.getElementById('ep-avatar').value.trim() || null,
-    website: document.getElementById('ep-website').value.trim() || null,
-    instagram: document.getElementById('ep-instagram').value.trim() || null,
-    message_requests: document.getElementById('ep-msgreq').value,
-    updated_at: new Date().toISOString(),
-  };
-  const { error } = await sb.from('profiles').update(payload).eq('user_id', CURRENT_USER.id);
-  if (error) {
-    if (error.code === '23505') return toast('That username is already taken.');
-    if (error.code === '23514') return toast('Username must be lowercase, start with a letter, 3-20 characters.');
-    return toast(error.message);
-  }
-  await ensureProfile();
-  toast('Profile updated');
-  go('/profile');
+  const username=document.getElementById('ep-username').value.trim().toLowerCase();
+  if(!/^[a-z][a-z0-9_.-]{2,29}$/.test(username))return toast('Username must be 3–30 characters and use letters, numbers, dots, underscores or hyphens.');
+  const payload={display_name:document.getElementById('ep-name').value.trim(),username,bio:document.getElementById('ep-bio').value.trim(),avatar_url:document.getElementById('ep-avatar').value.trim()||null,website:document.getElementById('ep-website').value.trim()||null,instagram:document.getElementById('ep-instagram').value.trim()||null,pronouns:document.getElementById('ep-pronouns').value.trim()||null,gender:document.getElementById('ep-gender').value||null,profile_category:document.getElementById('ep-category').value||null,message_requests:document.getElementById('ep-msgreq').value,updated_at:new Date().toISOString()};
+  const {error}=await sb.from('profiles').update(payload).eq('user_id',CURRENT_USER.id);
+  if(error){if(error.code==='23505')return toast('That username is already taken.');return toast(error.message);}
+  await ensureProfile();toast('Profile updated');go('/profile');
 }
 
 // ---------- ACCOUNT SETTINGS ----------
