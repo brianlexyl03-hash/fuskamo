@@ -178,6 +178,20 @@ class _SignedInView extends StatefulWidget {
   State<_SignedInView> createState() => _SignedInViewState();
 }
 
+class _ProfileMetric extends StatelessWidget {
+  final String value;
+  final String label;
+  const _ProfileMetric({required this.value,required this.label});
+  @override Widget build(BuildContext context)=>Column(mainAxisSize:MainAxisSize.min,children:[Text(value,style:AppTheme.display(17)),Text(label,style:AppTheme.body(10,color:AppColors.sub))]);
+}
+
+class _ProfileCount extends StatelessWidget {
+  final Future<List<Player>> value;
+  final String label;
+  const _ProfileCount({required this.value,required this.label});
+  @override Widget build(BuildContext context)=>FutureBuilder<List<Player>>(future:value,builder:(context,snapshot)=>Column(mainAxisSize:MainAxisSize.min,children:[Text('${snapshot.data?.length??0}',style:AppTheme.display(17)),Text(label,style:AppTheme.body(10,color:AppColors.sub))]));
+}
+
 class _SignedInViewState extends State<_SignedInView> {
   final _playerRepo = PlayerRepository();
   late Future<List<Player>> _savedFuture;
@@ -226,30 +240,33 @@ class _SignedInViewState extends State<_SignedInView> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Row(children:[Expanded(child: Text('PROFILE', style: AppTheme.display(30))), IconButton(tooltip:'Messages', onPressed:()=>Navigator.push(context, MaterialPageRoute(builder:(_)=>const MessagesScreen())), icon:const Icon(Icons.chat_bubble_outline)), IconButton(tooltip:'Account settings', onPressed:()=>Navigator.push(context, MaterialPageRoute(builder:(_)=>AccountSettingsScreen(auth:auth))), icon:const Icon(Icons.settings_outlined))]),
-            const SizedBox(height: 24),
-            Center(
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: AppColors.card,
-                    child: Text(initials, style: AppTheme.display(28, color: AppColors.green)),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(email, style: AppTheme.body(15, weight: FontWeight.w600)),
-                  if (createdAt != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Member since ${createdAt.day}/${createdAt.month}/${createdAt.year}',
-                      style: AppTheme.body(12, color: AppColors.sub),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Divider(color: AppColors.border, height: 1),
+            Row(children:[
+              Expanded(child: Text((user?.userMetadata?['username']?.toString().isNotEmpty==true ? user!.userMetadata!['username'].toString() : 'Profile'),style:AppTheme.display(24))),
+              IconButton(tooltip:'Messages',onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const MessagesScreen())),icon:const Icon(Icons.chat_bubble_outline)),
+              IconButton(tooltip:'Account settings',onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>AccountSettingsScreen(auth:auth))),icon:const Icon(Icons.menu))
+            ]),
+            const SizedBox(height:20),
+            Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
+              CircleAvatar(radius:42,backgroundColor:AppColors.card,backgroundImage:(user?.userMetadata?['avatar_url']?.toString().isNotEmpty==true)?NetworkImage(user!.userMetadata!['avatar_url'].toString()):null,child:(user?.userMetadata?['avatar_url']?.toString().isNotEmpty==true)?null:Text(initials,style:AppTheme.display(28,color:AppColors.green))),
+              const SizedBox(width:28),
+              Expanded(child:Row(mainAxisAlignment:MainAxisAlignment.spaceAround,children:[
+                _ProfileCount(value:_mySubmissionsFuture,label:'submissions'),
+                _ProfileMetric(value:'${email.isNotEmpty?1:0}',label:'account'),
+                _ProfileMetric(value:createdAt==null?'—':'${DateTime.now().difference(createdAt).inDays}',label:'days here'),
+              ]))
+            ]),
+            const SizedBox(height:14),
+            Text(user?.userMetadata?['display_name']?.toString().trim().isNotEmpty==true?user!.userMetadata!['display_name'].toString():email,style:AppTheme.body(15,weight:FontWeight.w700)),
+            if((user?.userMetadata?['bio']?.toString().trim().isNotEmpty??false))Padding(padding:const EdgeInsets.only(top:5),child:Text(user!.userMetadata!['bio'].toString(),style:AppTheme.body(13))),
+            if((user?.userMetadata?['website']?.toString().trim().isNotEmpty??false))Padding(padding:const EdgeInsets.only(top:5),child:Text(user!.userMetadata!['website'].toString(),style:AppTheme.body(12,color:AppColors.green))),
+            const SizedBox(height:14),
+            Row(children:[
+              Expanded(child:OutlinedButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const EditProfileScreen())),child:const Text('Edit profile'))),
+              const SizedBox(width:8),
+              Expanded(child:OutlinedButton(onPressed:()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Use your public profile link to share your profile.'))),child:const Text('Share profile'))),
+            ]),
+            const SizedBox(height:18),
+            const Divider(color:AppColors.border,height:1),
             _TwoFactorTile(auth: auth),
             ListTile(
               contentPadding: EdgeInsets.zero,
