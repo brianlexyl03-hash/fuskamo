@@ -7,19 +7,20 @@ import 'discover_screen.dart';
 import 'feed_screen.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
-import 'upload_screen.dart';
+import 'reels_screen.dart';
+import 'discover_screen.dart';
 
 /// Persistent five-surface shell: Home, Explore, Create, Messages and Profile.
 /// Each tab remains mounted so its scroll position and local UI state survive
-/// tab changes. Reels remain a dedicated vertical destination within Home.
+/// tab changes. The order follows the social Home, Reels, Direct, Search, Profile shell.
 class RootShellScreen extends StatelessWidget {
   const RootShellScreen({super.key});
 
   static const _screens = <Widget>[
     FeedScreen(),
-    DiscoverScreen(),
-    UploadScreen(),
+    ReelsScreen(),
     MessagesScreen(),
+    DiscoverScreen(),
     ProfileScreen(),
   ];
 
