@@ -69,9 +69,9 @@ class CompletionHardeningService {
   Future<List<Map<String, dynamic>>> currentSeason({String? role, int limit = 50}) async {
     final season = await _db.from('scoreboard_seasons').select('id,name,starts_at,ends_at,status').eq('status', 'active').order('starts_at', ascending: false).limit(1).maybeSingle();
     if (season == null) return const [];
-    var query = _db.from('scoreboard_entries').select().eq('season_id', season['id']).order('rank').limit(limit);
+    var query = _db.from('scoreboard_entries').select().eq('season_id', season['id']).order('rank');
     if (role != null && role.isNotEmpty) query = query.eq('role', role);
-    final rows = await query;
+    final rows = await query.limit(limit);
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
   }
 
