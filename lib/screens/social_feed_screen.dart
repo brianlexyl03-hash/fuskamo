@@ -60,6 +60,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
     } catch (_) {
       // Keep the feed usable when optional profile suggestions are unavailable.
     } finally {
+      if (mounted) setState(() {});
     }
   }
 
