@@ -19,7 +19,7 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     return Container(
-      height: 62 + bottomInset,
+      height: 58 + bottomInset,
       padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
         color: AppColors.black,
@@ -30,7 +30,6 @@ class AppBottomNav extends StatelessWidget {
         children: List.generate(_tabs.length, (index) {
           final tab = _tabs[index];
           final active = index == currentIndex;
-          const isCreate = false;
           return Expanded(
             child: Semantics(
               button: true,
@@ -47,33 +46,20 @@ class AppBottomNav extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: isCreate ? 42 : 36,
-                          height: isCreate ? 32 : 30,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
-                            color: isCreate ? AppColors.green : Colors.transparent,
-                            borderRadius: BorderRadius.circular(isCreate ? 10 : 8),
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           alignment: Alignment.center,
                           child: Icon(
                             tab.icon,
-                            size: isCreate ? 23 : 24,
-                            color: isCreate
-                                ? AppColors.black
-                                : active
-                                    ? AppColors.green
-                                    : AppColors.muted,
+                            size: 25,
+                            color: active ? AppColors.text : AppColors.sub,
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          tab.label,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                            color: active ? AppColors.green : AppColors.muted,
-                          ),
-                        ),
+
                       ],
                     ),
                   ),
