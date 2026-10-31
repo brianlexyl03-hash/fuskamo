@@ -567,11 +567,11 @@ async function submitPost() {
 }
 async function togglePostSave(postId,button){
   if(!requireAuth())return;
-  const {data:existing,error:lookupError}=await sb.from('social_post_saves').select('post_id').eq('post_id',postId).eq('user_id',CURRENT_USER.id).maybeSingle();
-  if(lookupError)return toast(lookupError.message);
-  if(existing){const {error}=await sb.from('social_post_saves').delete().eq('post_id',postId).eq('user_id',CURRENT_USER.id);if(error)return toast(error.message);button.classList.remove('saved');}
-  else{const {error}=await sb.from('social_post_saves').insert({post_id:postId,user_id:CURRENT_USER.id});if(error)return toast(error.message);button.classList.add('saved');}
+  const {data,error}=await sb.rpc('toggle_post_save',{p_post:postId});
+  if(error)return toast(error.message);
+  button.classList.toggle('saved',Boolean(data));
 }
+
 async function togglePostLike(postId, span) {
   if (!requireAuth()) return;
   const liked = span.dataset.liked === 'true';
