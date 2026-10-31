@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_colors.dart';
 import '../models/social_models.dart';
 import '../providers/social_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
-import 'story_settings_screen.dart';
+import 'package:share_plus/share_plus.dart';
+import 'notifications_screen.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -19,7 +19,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
   Map<String, Map<String, dynamic>> _profiles = <String, Map<String, dynamic>>{};
   Map<String, Map<String, dynamic>> _suggestions = <String, Map<String, dynamic>>{};
   String? _suggestedId;
-  bool _profileLoading = false;
   bool _suggestedFollowing = false;
 
   @override
@@ -35,7 +34,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
 
   Future<void> _loadPeople(SocialProvider social) async {
     if (!SupabaseService.isReady || !mounted) return;
-    setState(() => _profileLoading = true);
     try {
       final client = SupabaseService.client;
       final ids = social.posts.map((post) => post.authorId).toSet().toList();
@@ -60,7 +58,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
     } catch (_) {
       // Keep the feed usable when optional profile suggestions are unavailable.
     } finally {
-      if (mounted) setState(() => _profileLoading = false);
     }
   }
 
@@ -212,7 +209,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
         const Spacer(),
         Text('FUSKAMO', style: AppTheme.display(27, color: AppColors.text)),
         const Spacer(),
-        IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StorySettingsScreen())), icon: const Icon(Icons.favorite_border, size: 27, color: AppColors.text), tooltip: 'Activity'),
+        IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen())), icon: const Icon(Icons.favorite_border, size: 27, color: AppColors.text), tooltip: 'Activity'),
       ]),
     ),
   );
@@ -233,7 +230,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
         style: OutlinedButton.styleFrom(foregroundColor: AppColors.text, side: const BorderSide(color: AppColors.sub), padding: const EdgeInsets.symmetric(horizontal: 18), minimumSize: const Size(0, 36)),
         child: Text(_suggestedFollowing ? 'Following' : 'Follow'),
       ),
-      IconButton(onPressed: () { final id = profile['user_id']; if (id is String) Navigator.pushNamed(context, '/profile/$id'); }, icon: const Icon(Icons.more_horiz, color: AppColors.text), tooltip: 'More'),
     ]),
   );
 
@@ -313,6 +309,47 @@ class _PostCardState extends State<_PostCard> {
     } finally { if (mounted) setState(() => _busy = false); }
   }
 
+  Future<void> _showComments() async {
+    final repository = context.read<SocialProvider>().repository;
+    final controller = TextEditingController();
+    try {
+      final comments = await repository.comments(widget.post.id);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: AppColors.surface,
+        builder: (sheetContext) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * .72,
+            child: Column(children: [
+              Padding(padding: const EdgeInsets.all(16), child: Text('Comments', style: AppTheme.display(22))),
+              Expanded(child: ListView(children: comments.map((comment) => ListTile(title: Text(comment.body), subtitle: const Text('FUSKAMO member'))).toList())),
+              Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+                Expanded(child: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Add a comment…'))),
+                IconButton(onPressed: () async {
+                  final body = controller.text.trim();
+                  if (body.isEmpty) return;
+                  try {
+                    await repository.addComment(widget.post.id, body);
+                    controller.clear();
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  } catch (error) {
+                    if (sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(SnackBar(content: Text('Could not add comment: $error')));
+                  }
+                }, icon: const Icon(Icons.send, color: AppColors.text)),
+              ])),
+            ]),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load comments: $error')));
+    } finally {
+      controller.dispose();
+    }
+  }
   Future<void> _save() async {
     try {
       final saved = await context.read<SocialProvider>().savePost(widget.post.id);
@@ -358,9 +395,9 @@ class _PostCardState extends State<_PostCard> {
           child: Row(children: [
             IconButton(onPressed: _like, icon: Icon(_liked ? Icons.favorite : Icons.favorite_border, color: _liked ? AppColors.red : AppColors.text, size: 26)),
             Text('${post.likeCount + (_liked ? 1 : 0)}', style: AppTheme.body(12)),
-            IconButton(onPressed: () => Navigator.pushNamed(context, '/post/${post.id}'), icon: const Icon(Icons.mode_comment_outlined, color: AppColors.text, size: 25)),
+            IconButton(onPressed: _showComments, icon: const Icon(Icons.mode_comment_outlined, color: AppColors.text, size: 25)),
             Text('${post.commentCount}', style: AppTheme.body(12)),
-            IconButton(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Use your device share menu from the post detail.'))), icon: const Icon(Icons.send_outlined, color: AppColors.text, size: 25)),
+            IconButton(onPressed: () => Share.share('FUSKAMO: ${post.body}'), icon: const Icon(Icons.send_outlined, color: AppColors.text, size: 25)),
             const Spacer(),
             IconButton(onPressed: _save, icon: Icon(_saved ? Icons.bookmark : Icons.bookmark_border, color: AppColors.text, size: 25)),
           ]),
