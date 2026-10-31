@@ -66,7 +66,7 @@ const ROUTES = [
   'profile', 'public-profile', 'edit-profile', 'account-settings', 'security-settings',
   'story-settings', 'verification', 'moderation', 'analytics', 'mfa-setup', 'post', 'join',
 ];
-const NAV_TABS = { feed: 'feed', projects: 'projects', data: 'data', discover: 'discover', search: 'search', reels: 'reels', groups: 'groups', scouts: 'scouts', profile: 'profile' };
+const NAV_TABS = { feed: 'feed', reels: 'reels', search: 'search', messages: 'messages', profile: 'profile' };
 
 function parseHash() {
   const raw = (location.hash || '#/feed').slice(2); // strip '#/'
@@ -362,33 +362,14 @@ RENDERERS.feed = async (el) => {
   const followedForSuggestions = new Set((suggestionFollows||[]).map(x=>x.followed_id));
   const { data: suggestionRows } = await sb.from('profiles').select('user_id,display_name,username,avatar_url,verified,role').neq('user_id',CURRENT_USER.id).limit(24);
   const suggestionsHtml = (suggestionRows||[]).filter(x=>!followedForSuggestions.has(x.user_id)).slice(0,5).map(p=>`<div class="suggestion">${avatarHtml(p.avatar_url,p.display_name,'sm')}<div class="suggestion-copy"><strong>${escapeHtml(p.username||p.display_name||'Member')}</strong><small>${escapeHtml(p.role||'football community')}</small></div><button onclick="go('/public-profile/${p.user_id}')">View</button></div>`).join('');
+  const uniqueStories=[...new Map(stories.map(s=>[s.author_id,s])).values()].sort((x,y)=>{const xs=seenStories.has(x.id),ys=seenStories.has(y.id);return xs===ys?new Date(y.created_at)-new Date(x.created_at):xs?1:-1;});
   const storyHtml = `<div class="stories-tray" aria-label="Stories">
-    <button class="story-bubble" type="button" onclick="go('/story-settings')" aria-label="Add a story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
-    ${[...new Map(stories.map(s=>[s.author_id,s])).values()].map(s=>{const p=storyProfiles[s.author_id]||{};const own= s.author_id===CURRENT_USER?.id;return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url? `<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${own?'Your story':escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
+    <button class="story-bubble your-story" type="button" onclick="go('/story-settings')" aria-label="Add to your story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
+    ${uniqueStories.map(s=>{const p=storyProfiles[s.author_id]||{};return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url?`<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
   </div>`;
-  el.innerHTML = `
-    ${storyHtml}
-    <div class="feed-tabs" role="tablist" aria-label="Feed type">
-      <button type="button" class="${SOCIAL_FEED_MODE==='for-you'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='for-you'}" onclick="setSocialFeedMode('for-you')">For you</button>
-      <button type="button" class="${SOCIAL_FEED_MODE==='following'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='following'}" onclick="setSocialFeedMode('following')">Following</button>
-    </div>
-    <div class="football-shortcuts"><button onclick="go('/discover')">Players</button><button onclick="go('/scouts')">Scouts</button><button onclick="go('/groups')">Groups</button><button onclick="go('/messages')">Messages</button></div>
-    <div class="composer-row">
-      ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
-      <div style="flex:1">
-        <textarea id="composer-body" placeholder="What's happening in football?" rows="2"></textarea>
-        <div id="composer-preview"></div>
-        <div class="row between" style="margin-top:6px">
-          <label for="composer-file" class="icon-btn" style="cursor:pointer;color:var(--green)">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg>
-          </label>
-          <input type="file" id="composer-file" accept="image/*,video/*" style="display:none" onchange="previewComposerFile()">
-          <button class="btn" id="composer-post-btn" style="width:auto;padding:9px 22px" onclick="submitPost()">Post</button>
-        </div>
-      </div>
-    </div>
-    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>
-    <aside class="social-suggestions"><div class="suggestion-head"><span>Suggested for you</span><button onclick="go('/discover')">See all</button></div>${suggestionsHtml || '<p class="muted">Follow players, scouts and clubs to build your network.</p>'}<div class="suggestion-links"><button onclick="go('/discover')">Discover players</button><button onclick="go('/scouts')">Find scouts</button><button onclick="go('/groups')">Football groups</button><button onclick="go('/account-settings')">Settings</button></div><p class="suggestion-footer">FUSKAMO · Football, talent, community</p></aside>`;
+  const suggested=(suggestionRows||[]).find(p=>!followedForSuggestions.has(p.user_id));
+  const suggestedHtml=suggested?`<section class="home-suggestion" aria-label="Suggested account"><div class="home-suggestion-identity">${avatarHtml(suggested.avatar_url,suggested.display_name,'sm')}<div><strong>${escapeHtml(suggested.username||suggested.display_name||'FUSKAMO member')}</strong><span>Suggested for you</span></div></div><button type="button" onclick="toggleFollow('${suggested.user_id}',this)">Follow</button><button class="home-suggestion-more" type="button" onclick="go('/public-profile/${suggested.user_id}')" aria-label="View suggested account"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h12"/></svg></button></section>`:'';
+  el.innerHTML = `${storyHtml}${suggestedHtml}<div id="feed-list">${(posts||[]).map(p=>feedPostHtml(p,profiles[p.author_id],liked.has(p.id))).join('')||emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet',SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>`;
   initFeedVideoAutoplay();
 };
 let composerFile = null;
@@ -451,23 +432,35 @@ function initFeedVideoAutoplay() {
   videos.forEach((v) => observer.observe(v));
 }
 function feedPostHtml(p, profile, isLiked) {
-  return `<article class="card post-card">
-    <div class="post-header row" style="align-items:center;margin-bottom:10px">${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
-    <div style="flex:1;min-width:0">
-      <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
-      ${p.media_url ? `<div class="post-media" style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
-        ${p.media_type === 'external_video' ? feedVideoHtml(p.media_url) : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
-        <div class="dbl-heart">${HEART_SVG_FILLED}</div>
-      </div>` : ''}
-      <div class="row post-actions" style="gap:16px;margin-top:10px">
-        <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
-        <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
-        <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
-      </div>
-      ${p.body ? `<p class="post-caption" style="margin:8px 0 0;line-height:1.5;overflow-wrap:anywhere"><strong>${escapeHtml(profile?.username || profile?.display_name || 'Member')}</strong> ${escapeHtml(p.body)}</p>` : ''}
-    </div>
-  </article>`;
+  const author=profile?.username||profile?.display_name||'Member';
+  const media=p.media_url?'<div class="post-media" ondblclick="dblTapLike(\''+p.id+'\', this)">'+(p.media_type==='external_video'?feedVideoHtml(p.media_url):'<img src="'+escapeHtml(p.media_url)+'" alt="Post by '+escapeHtml(author)+'" loading="lazy">')+'<div class="dbl-heart">'+HEART_SVG_FILLED+'</div></div>':'';
+  return '<article class="card post-card" data-post-id="'+p.id+'">'+
+    '<header class="post-header row">'+avatarHtml(profile?.avatar_url,profile?.display_name,'sm')+
+    '<div class="post-identity"><strong>'+escapeHtml(author)+'</strong>'+badgeHtml(profile?.badge_type,profile?.verified)+'<span class="muted"> · '+timeAgo(p.created_at)+'</span></div>'+
+    '<button class="post-more" type="button" onclick="openPostShare(\''+p.id+'\')" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></header>'+
+    media+
+    '<div class="row post-actions">'+
+    '<button type="button" class="engage-btn '+(isLiked?'liked':'')+'" onclick="togglePostLike(\''+p.id+'\', this)" data-liked="'+isLiked+'">'+HEART_SVG(isLiked)+'<span class="cnt">'+p.like_count+'</span></button>'+
+    '<button type="button" class="engage-btn" onclick="go(\'/post/'+p.id+'\')" aria-label="Comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg><span>'+p.comment_count+'</span></button>'+
+    '<button type="button" class="engage-btn" onclick="openPostShare(\''+p.id+'\')" aria-label="Share post"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>'+
+    '<button type="button" class="engage-btn post-save" onclick="togglePostSave(\''+p.id+'\',this)" aria-label="Save post"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button></div>'+
+    (p.body?'<p class="post-caption"><strong>'+escapeHtml(author)+'</strong> '+escapeHtml(p.body)+'</p>':'')+
+    '</article>';
 }
+function openPostShare(postId){
+  const url=new URL(window.location.href);url.hash='/post/'+postId;
+  document.getElementById('post-share-backdrop')?.remove();
+  const backdrop=document.createElement('div');backdrop.id='post-share-backdrop';backdrop.className='create-menu-backdrop';
+  backdrop.innerHTML='<section class="create-menu post-share-menu" role="dialog" aria-modal="true" aria-label="Share post"><h3>Share post</h3><button type="button" id="copy-post-link">Copy link <span>Copy a link to this post</span></button><button type="button" onclick="closePostShare()" style="justify-content:center;color:#aaa">Cancel</button></section>';
+  backdrop.addEventListener('click',event=>{if(event.target===backdrop)closePostShare()});
+  document.body.appendChild(backdrop);
+  document.getElementById('copy-post-link')?.addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText(url.toString());toast('Post link copied');closePostShare();}
+    catch(error){toast('Could not copy the post link.');}
+  });
+}
+function closePostShare(){document.getElementById('post-share-backdrop')?.remove();}
+
 function HEART_SVG(filled) { return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`; }
 const HEART_SVG_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`;
 async function dblTapLike(postId, wrapEl) {
@@ -572,6 +565,13 @@ async function submitPost() {
     btn.disabled = false; btn.textContent = 'Post';
   }
 }
+async function togglePostSave(postId,button){
+  if(!requireAuth())return;
+  const {data,error}=await sb.rpc('toggle_post_save',{p_post:postId});
+  if(error)return toast(error.message);
+  button.classList.toggle('saved',Boolean(data));
+}
+
 async function togglePostLike(postId, span) {
   if (!requireAuth()) return;
   const liked = span.dataset.liked === 'true';
@@ -629,7 +629,7 @@ async function loadExploreGrid(){
   if(SEARCH_CATEGORY==='scouts'){const {data}=await sb.from('scouts').select('id,name,organization').eq('verified',true).order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(s=>`<button class="explore-tile explore-player" onclick="go('/scouts')"><span>${escapeHtml(s.name)}</span><small>${escapeHtml(s.organization||'Verified scout')}</small></button>`).join('')||emptyHtml('No verified scouts yet','Check back soon.');return;}
   if(SEARCH_CATEGORY==='groups'){const {data}=await sb.from('groups').select('id,name,description').order('created_at',{ascending:false}).limit(24);grid.innerHTML=(data||[]).map(g=>`<button class="explore-tile explore-player" onclick="go('/group/${g.id}')"><span>${escapeHtml(g.name)}</span><small>${escapeHtml(g.description||'Football community')}</small></button>`).join('')||emptyHtml('No groups yet','Football communities will appear here.');return;}
   const {data}=await sb.from('social_posts').select('id,media_url,media_type,body').eq('status','published').eq('visibility','public').not('media_url','is',null).order('created_at',{ascending:false}).limit(24);
-  grid.innerHTML=(data||[]).map(p=>`<button class="explore-tile" onclick="go('/post/${p.id}')" aria-label="Open post"><img src="${escapeHtml(p.media_type==='external_video'?'':p.media_url)}" alt="" loading="lazy">${p.media_type==='external_video'?'<span class="tile-play">▶</span>':''}<span class="tile-meta">${escapeHtml((p.body||'Football post').slice(0,90))}</span></button>`).join('')||emptyHtml('Explore FUSKAMO','Posts and football moments will appear here.');
+  grid.innerHTML=(data||[]).map(p=>{const video=p.media_type==='external_video';const media=video?'<div class="explore-media-fallback" aria-label="Video post"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/></svg></div>':`<img src="${escapeHtml(p.media_url)}" alt="" loading="lazy" decoding="async">`;return `<button class="explore-tile" onclick="go('/post/${p.id}')" aria-label="Open post">${media}<span class="tile-meta">${escapeHtml((p.body||'Football post').slice(0,90))}</span></button>`;}).join('')||emptyHtml('Explore FUSKAMO','Posts and football moments will appear here.');
 };
 let searchTimer;
 async function runSearch() {
@@ -1005,7 +1005,7 @@ RENDERERS.messages = async (el) => {
   el.innerHTML = `
     <section class="dm-shell">
       <header class="dm-header">
-        <div class="dm-title-row"><div><p class="dm-eyebrow">YOUR COMMUNITY</p><h1>Messages</h1></div><button class="dm-compose" onclick="go('/search')" aria-label="Find someone to message"><span aria-hidden="true">＋</span><span>New message</span></button></div>
+        <div class="dm-title-row"><div><p class="dm-eyebrow">YOUR COMMUNITY</p><h1>Messages</h1></div><button class="dm-compose" onclick="go('/search')" aria-label="Find someone to message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New message</span></button></div>
         <label class="dm-search"><span aria-hidden="true">⌕</span><input id="dm-search" type="search" placeholder="Search conversations" autocomplete="off" oninput="filterInbox()"><button id="dm-clear-search" type="button" aria-label="Clear search" onclick="document.getElementById('dm-search').value='';filterInbox()" hidden>×</button></label>
         <div class="dm-tabs" role="tablist" aria-label="Message filters">
           <button class="dm-tab active" role="tab" aria-selected="true" data-filter="all" onclick="setInboxFilter('all',this)">All <span>${items.length}</span></button>
@@ -1417,39 +1417,41 @@ async function saveNotifPrefs() {
 RENDERERS.profile = async (el) => {
   if (!requireAuth()) { showAuthGate(); return; }
   const p = CURRENT_PROFILE || {};
-  const { count: followers } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('followed_id', CURRENT_USER.id);
-  const { count: following } = await sb.from('profile_follows').select('*', { count: 'exact', head: true }).eq('follower_id', CURRENT_USER.id);
-  const { data: profilePosts } = await sb.from('social_posts').select('id,media_url,media_type,body,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
-  const { data: profileReels } = await sb.from('social_reels').select('id,video_url,thumbnail_url,caption,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(30);
-  const { data: highlights } = await sb.from('story_highlights').select('id,title,cover_url').eq('owner_id',CURRENT_USER.id).order('created_at',{ascending:true});
-  const profileGrid = (profilePosts||[]).filter(x=>x.media_url).map(x=>`<button class="explore-tile" onclick="go('/post/${x.id}')" aria-label="Open post">${x.media_type==='external_video'?'<span class="tile-play">▶</span>':`<img src="${escapeHtml(x.media_url)}" alt="" loading="lazy">`}<span class="tile-meta">${escapeHtml(x.body||'Football post')}</span></button>`).join('');
-  const reelGrid = (profileReels||[]).map(x=>`<button class="explore-tile" onclick="go('/reels')" aria-label="Watch reel">${x.thumbnail_url?`<img src="${escapeHtml(x.thumbnail_url)}" alt="" loading="lazy">`:'<span class="tile-play">▶</span>'}<span class="tile-meta">${escapeHtml(x.caption||'Football reel')}</span></button>`).join('');
-  el.innerHTML = `<section class="profile-header">
-      ${avatarHtml(p.avatar_url, p.display_name, 'lg')}
-      <div class="profile-info"><div class="row between"><h2>${escapeHtml(p.display_name || 'FUSKAMO Member')}${badgeHtml(p.badge_type, p.verified)}</h2><button class="icon-btn" onclick="openProfileMenu()" aria-label="Profile settings">•••</button></div>
-      <p class="muted">@${escapeHtml(p.username || 'unset')} · ${escapeHtml(p.role||'member')}</p>
-      <div class="profile-stats"><span><b>${(profilePosts||[]).length}</b> posts</span><span><b>${followers || 0}</b> followers</span><span><b>${following || 0}</b> following</span></div>
-      <div class="row profile-actions"><button class="btn secondary" onclick="go('/edit-profile')">Edit profile</button><button class="btn secondary" onclick="go('/analytics')">Professional dashboard</button></div></div>
-    </section>
-    <p class="profile-bio">${escapeHtml(p.bio || '')}</p>
-    <div class="profile-shortcuts"><button onclick="go('/story-settings')"><span class="highlight-circle">+</span><small>New story</small></button>${(highlights||[]).map(h=>`<button onclick="openStoryHighlight('${h.id}')"><span class="highlight-circle">${h.cover_url?`<img src="${escapeHtml(h.cover_url)}" alt="">`:'+'}</span><small>${escapeHtml(h.title)}</small></button>`).join('')}</div>
-    <div class="profile-tabs"><button class="active" onclick="setProfileGridTab('posts',this)">Posts</button><button onclick="setProfileGridTab('reels',this)">Reels</button><button onclick="go('/analytics')">Insights</button></div>
-    <div class="profile-grid" id="profile-grid">${profileGrid||emptyHtml('No posts yet','Share your first football moment.')}</div>
-    <div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div>
-    <div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>
-      ${chev('Account settings', "go('/account-settings');closeProfileMenu()")}
-      ${chev('Security and privacy', "go('/security-settings');closeProfileMenu()")}
-      ${chev('Create story', "go('/story-settings');closeProfileMenu()")}
-      ${chev('Groups and communities', "go('/groups');closeProfileMenu()")}
-      ${chev('Scouts and opportunities', "go('/scouts');closeProfileMenu()")}
-      ${chev('Notifications', "go('/notification-preferences');closeProfileMenu()")}
-      ${chev('Get verified', "go('/verification');closeProfileMenu()")}
-      ${chev('My reports', "go('/my-reports');closeProfileMenu()")}
-      ${chev('Two-factor authentication', "go('/mfa-setup');closeProfileMenu()")}
-      <button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button>
-    </div>`;
-  window.__profileGridTabs = {posts: `${profileGrid}`, reels: `${reelGrid}`};
+  const [followersResult, followingResult, postsResult, reelsResult, highlightsResult] = await Promise.all([
+    sb.from('profile_follows').select('*',{count:'exact',head:true}).eq('followed_id',CURRENT_USER.id),
+    sb.from('profile_follows').select('*',{count:'exact',head:true}).eq('follower_id',CURRENT_USER.id),
+    sb.from('social_posts').select('id,media_url,media_type,body,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(60),
+    sb.from('social_reels').select('id,video_url,thumbnail_url,caption,created_at').eq('author_id',CURRENT_USER.id).eq('status','published').order('created_at',{ascending:false}).limit(60),
+    sb.from('story_highlights').select('id,title,cover_url').eq('owner_id',CURRENT_USER.id).order('created_at',{ascending:true})
+  ]);
+  const followers=followersResult.count||0, following=followingResult.count||0;
+  const posts=postsResult.data||[], reels=reelsResult.data||[], highlights=highlightsResult.data||[];
+  const displayName=escapeHtml(p.display_name||'FUSKAMO Member'), username=escapeHtml(p.username||'');
+  const linkRows=[p.website,p.instagram?('https://instagram.com/'+String(p.instagram).replace(/^@/,'')):null,p.tiktok?('https://tiktok.com/@'+String(p.tiktok).replace(/^@/,'')):null].filter(Boolean);
+  const linkHtml=linkRows.map(url=>{const safe=escapeHtml(url);return '<a class="profile-link" href="'+safe+'" target="_blank" rel="noopener noreferrer">'+safe.replace(/^https?:\/\//,'').replace(/\/$/,'')+'</a>';}).join('');
+  const profileGrid=posts.filter(x=>x.media_url).map(x=>'<button class="profile-tile" onclick="go(\'/post/'+x.id+'\')" aria-label="Open post">'+(x.media_type==='external_video'?'<span class="profile-video-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z"/></svg></span>':'<img src="'+escapeHtml(x.media_url)+'" alt="" loading="lazy" decoding="async">')+'<span class="profile-tile-caption">'+escapeHtml(x.body||'Football moment')+'</span></button>').join('');
+  const reelGrid=reels.map(x=>'<button class="profile-tile" onclick="go(\'/reels\')" aria-label="Watch reel">'+(x.thumbnail_url?'<img src="'+escapeHtml(x.thumbnail_url)+'" alt="" loading="lazy" decoding="async">':'<span class="profile-video-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z"/></svg></span>')+'<span class="profile-tile-caption">'+escapeHtml(x.caption||'Football reel')+'</span></button>').join('');
+  const avatar=avatarHtml(p.avatar_url,p.display_name,'lg');
+  el.innerHTML='<section class="ig-profile">'+
+    '<header class="ig-profile-top"><div class="ig-profile-identity"><div class="ig-profile-avatar">'+avatar+'</div><div class="ig-profile-stats"><span><b>'+posts.length+'</b><small>posts</small></span><span><b>'+followers+'</b><small>followers</small></span><span><b>'+following+'</b><small>following</small></span></div></div>'+
+    '<div class="ig-profile-name"><strong>'+displayName+badgeHtml(p.badge_type,p.verified)+'</strong><span>@'+username+'</span></div>'+
+    (p.role?'<div class="ig-profile-category">'+escapeHtml(p.role)+'</div>':'')+
+    (p.bio?'<p class="ig-profile-bio">'+escapeHtml(p.bio)+'</p>':'')+
+    (linkHtml?'<div class="ig-profile-links">'+linkHtml+'</div>':'')+
+    '<div class="ig-profile-actions"><button class="ig-profile-action primary" onclick="go(\'/edit-profile\')">Edit profile</button><button class="ig-profile-action" onclick="shareOwnProfile()">Share profile</button></div>'+
+    '<button class="ig-dashboard" onclick="go(\'/analytics\')"><strong>Your dashboard</strong><span>View your professional insights</span></button></header>'+
+    '<div class="ig-highlights">'+(highlights.map(h=>'<button class="ig-highlight" onclick="openStoryHighlight(\''+h.id+'\')"><span>'+(h.cover_url?'<img src="'+escapeHtml(h.cover_url)+'" alt="">':'<span class="ig-highlight-empty">+</span>')+'</span><small>'+escapeHtml(h.title)+'</small></button>').join(''))+'<button class="ig-highlight" onclick="go(\'/story-settings\')"><span class="ig-highlight-empty">+</span><small>New</small></button></div>'+
+    '<nav class="ig-profile-tabs" aria-label="Profile content"><button class="active" data-grid="posts" onclick="setProfileGridTab(\'posts\',this)" aria-label="Posts"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button><button data-grid="reels" onclick="setProfileGridTab(\'reels\',this)" aria-label="Reels"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m10 8 6 4-6 4z"/></svg></button><button onclick="go(\'/saved\')" aria-label="Saved posts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg></button></nav>'+
+    '<div class="ig-profile-grid" id="profile-grid">'+(profileGrid||emptyHtml('No posts yet','Your football moments will appear here.'))+'</div>'+
+    '<div id="profile-menu-backdrop" class="menu-backdrop" onclick="closeProfileMenu()"></div><div id="profile-menu-sheet" class="menu-sheet"><div class="menu-sheet-handle"></div>'+
+    chev('Account settings',"go('/account-settings');closeProfileMenu()")+chev('Security and privacy',"go('/security-settings');closeProfileMenu()")+chev('Create story',"go('/story-settings');closeProfileMenu()")+chev('Groups and communities',"go('/groups');closeProfileMenu()")+chev('Scouts and opportunities',"go('/scouts');closeProfileMenu()")+chev('Notifications',"go('/notification-preferences');closeProfileMenu()")+chev('Get verified',"go('/verification');closeProfileMenu()")+'<button class="btn danger" style="margin-top:14px" onclick="signOut()">Sign out</button></div></section>';
+  window.__profileGridTabs={posts:profileGrid,reels:reelGrid};
 };
+function shareOwnProfile(){
+ const url=location.origin+location.pathname+'#/profile';
+ if(navigator.clipboard?.writeText){navigator.clipboard.writeText(url).then(()=>toast('Profile link copied')).catch(()=>toast('Could not copy profile link'));}
+ else toast(url);
+}
 function chev(label, onclick) {
   return `<div class="settings-link" onclick="${onclick}"><span>${label}</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>`;
 }
@@ -1512,25 +1514,23 @@ async function messageUser(userId) {
 
 // ---------- EDIT PROFILE ----------
 RENDERERS['edit-profile'] = async (el) => {
-  const p = CURRENT_PROFILE || {};
-  el.innerHTML = `<h2 style="margin-bottom:14px">Edit Profile</h2>
-    <div style="text-align:center;margin-bottom:16px">
-      <label for="ep-avatar-file" style="cursor:pointer;display:inline-block;position:relative">
-        <div id="ep-avatar-preview">${avatarHtml(p.avatar_url, p.display_name, 'lg')}</div>
-        <div style="position:absolute;bottom:0;right:0;background:var(--green);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:2px solid var(--black)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--black)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg></div>
-      </label>
-      <input type="file" id="ep-avatar-file" accept="image/*" style="display:none" onchange="uploadAvatarNow()">
-      <p class="muted" style="margin-top:6px">Tap to change photo</p>
-    </div>
-    <label>Display name</label><input id="ep-name" value="${escapeHtml(p.display_name || '')}">
-    <label>Username</label><input id="ep-username" value="${escapeHtml(p.username || '')}" oninput="checkUsernameAvailable()" placeholder="lowercase, starts with a letter">
-    <p class="muted" id="ep-username-status" style="margin:-6px 0 10px"></p>
-    <label>Bio</label><textarea id="ep-bio" rows="3">${escapeHtml(p.bio || '')}</textarea>
-    <input type="hidden" id="ep-avatar" value="${escapeHtml(p.avatar_url || '')}">
-    <label>Website</label><input id="ep-website" value="${escapeHtml(p.website || '')}">
-    <label>Instagram</label><input id="ep-instagram" value="${escapeHtml(p.instagram || '')}">
-    <label>Who can message you</label><select id="ep-msgreq"><option value="everyone" ${p.message_requests === 'everyone' ? 'selected' : ''}>Everyone</option><option value="followers" ${p.message_requests === 'followers' ? 'selected' : ''}>Followers</option><option value="nobody" ${p.message_requests === 'nobody' ? 'selected' : ''}>Nobody</option></select>
-    <button class="btn" onclick="saveProfile()">Save</button>`;
+  const p=CURRENT_PROFILE||{};
+  el.innerHTML='<section class="ig-edit-profile"><header class="ig-edit-header"><button class="ig-back" onclick="go(\'/profile\')" aria-label="Back to profile"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><h1>Edit profile</h1><button class="ig-save" onclick="saveProfile()">Save</button></header>'+
+    '<div class="ig-edit-photo"><label for="ep-avatar-file" class="ig-photo-pick"><span id="ep-avatar-preview">'+avatarHtml(p.avatar_url,p.display_name,'lg')+'</span><span>Change photo</span></label><input type="file" id="ep-avatar-file" accept="image/*" hidden onchange="uploadAvatarNow()"><input type="hidden" id="ep-avatar" value="'+escapeHtml(p.avatar_url||'')+'"></div>'+
+    '<div class="ig-edit-fields">'+
+    '<label class="ig-edit-field"><span>Name</span><input id="ep-name" maxlength="80" value="'+escapeHtml(p.display_name||'')+'" autocomplete="name"></label>'+
+    '<label class="ig-edit-field"><span>Username</span><input id="ep-username" maxlength="30" value="'+escapeHtml(p.username||'')+'" oninput="checkUsernameAvailable()" autocomplete="username"><small id="ep-username-status"></small></label>'+
+    '<label class="ig-edit-field"><span>Pronouns</span><input id="ep-pronouns" maxlength="40" value="'+escapeHtml(p.pronouns||'')+'" placeholder="Add your pronouns"></label>'+
+    '<label class="ig-edit-field"><span>Bio</span><textarea id="ep-bio" maxlength="500" rows="3">'+escapeHtml(p.bio||'')+'</textarea></label>'+
+    '<div class="ig-edit-section"><div><strong>Links</strong><span>Add links to your profile</span></div><label class="ig-edit-field"><span>Website</span><input id="ep-website" type="url" value="'+escapeHtml(p.website||'')+'" placeholder="https://"></label><label class="ig-edit-field"><span>Instagram</span><input id="ep-instagram" value="'+escapeHtml(p.instagram||'')+'" placeholder="@username"></label></div>'+
+    '<div class="ig-edit-row" onclick="go(\'/story-settings\')"><span><strong>Story highlights</strong><small>Create a story to feature on your profile</small></span><span>›</span></div>'+
+    '<label class="ig-edit-field"><span>Gender</span><select id="ep-gender"><option value="">Prefer not to say</option><option value="male" '+(p.gender==='male'?'selected':'')+'>Male</option><option value="female" '+(p.gender==='female'?'selected':'')+'>Female</option><option value="non_binary" '+(p.gender==='non_binary'?'selected':'')+'>Non-binary</option><option value="custom" '+(p.gender==='custom'?'selected':'')+'>Custom</option></select></label>'+
+    '<div class="ig-edit-row"><span><strong>Post grid</strong><small>Posts are currently displayed newest first</small></span></div>'+
+    '<div class="ig-edit-section"><div><strong>Profile information</strong><span>Manage how your profile is presented</span></div>'+
+    '<label class="ig-edit-field"><span>Category</span><select id="ep-category"><option value="">Choose category</option><option value="player" '+(p.profile_category==='player'?'selected':'')+'>Athlete / Player</option><option value="coach" '+(p.profile_category==='coach'?'selected':'')+'>Coach</option><option value="scout" '+(p.profile_category==='scout'?'selected':'')+'>Scout</option><option value="club" '+(p.profile_category==='club'?'selected':'')+'>Club / Team</option><option value="creator" '+(p.profile_category==='creator'?'selected':'')+'>Creator</option></select></label>'+
+    '<label class="ig-edit-field"><span>Who can message you</span><select id="ep-msgreq"><option value="everyone" '+(p.message_requests==='everyone'?'selected':'')+'>Everyone</option><option value="followers" '+(p.message_requests==='followers'?'selected':'')+'>Followers</option><option value="nobody" '+(p.message_requests==='nobody'?'selected':'')+'>Nobody</option></select></label>'+
+    '<p class="ig-edit-note">Your public contact links are managed in the Links section above. Account security and sign-in details are in Account settings.</p></div>'+
+    '</div><button class="ig-save-bottom" onclick="saveProfile()">Save changes</button></section>';
 };
 async function uploadAvatarNow() {
   if (!requireAuth()) return;
@@ -1549,9 +1549,9 @@ function checkUsernameAvailable() {
   const raw = document.getElementById('ep-username').value.trim().toLowerCase();
   const status = document.getElementById('ep-username-status');
   if (!raw) { status.textContent = ''; return; }
-  if (!/^[a-z][a-z0-9_]{2,19}$/.test(raw)) {
+  if (!/^[a-z][a-z0-9_.-]{2,29}$/.test(raw)) {
     status.style.color = 'var(--red)';
-    status.textContent = 'Lowercase letters/numbers/underscore, must start with a letter, 3-20 characters.';
+    status.textContent = 'Use 3–30 lowercase letters, numbers, dots, underscores or hyphens; start with a letter.';
     return;
   }
   status.style.color = 'var(--sub)';
@@ -1563,25 +1563,12 @@ function checkUsernameAvailable() {
   }, 400);
 }
 async function saveProfile() {
-  const payload = {
-    display_name: document.getElementById('ep-name').value.trim(),
-    username: document.getElementById('ep-username').value.trim().toLowerCase() || null,
-    bio: document.getElementById('ep-bio').value.trim(),
-    avatar_url: document.getElementById('ep-avatar').value.trim() || null,
-    website: document.getElementById('ep-website').value.trim() || null,
-    instagram: document.getElementById('ep-instagram').value.trim() || null,
-    message_requests: document.getElementById('ep-msgreq').value,
-    updated_at: new Date().toISOString(),
-  };
-  const { error } = await sb.from('profiles').update(payload).eq('user_id', CURRENT_USER.id);
-  if (error) {
-    if (error.code === '23505') return toast('That username is already taken.');
-    if (error.code === '23514') return toast('Username must be lowercase, start with a letter, 3-20 characters.');
-    return toast(error.message);
-  }
-  await ensureProfile();
-  toast('Profile updated');
-  go('/profile');
+  const username=document.getElementById('ep-username').value.trim().toLowerCase();
+  if(!/^[a-z][a-z0-9_.-]{2,29}$/.test(username))return toast('Username must be 3–30 characters and use letters, numbers, dots, underscores or hyphens.');
+  const payload={display_name:document.getElementById('ep-name').value.trim(),username,bio:document.getElementById('ep-bio').value.trim(),avatar_url:document.getElementById('ep-avatar').value.trim()||null,website:document.getElementById('ep-website').value.trim()||null,instagram:document.getElementById('ep-instagram').value.trim()||null,pronouns:document.getElementById('ep-pronouns').value.trim()||null,gender:document.getElementById('ep-gender').value||null,profile_category:document.getElementById('ep-category').value||null,message_requests:document.getElementById('ep-msgreq').value,updated_at:new Date().toISOString()};
+  const {error}=await sb.from('profiles').update(payload).eq('user_id',CURRENT_USER.id);
+  if(error){if(error.code==='23505')return toast('That username is already taken.');return toast(error.message);}
+  await ensureProfile();toast('Profile updated');go('/profile');
 }
 
 // ---------- ACCOUNT SETTINGS ----------
@@ -1729,7 +1716,34 @@ RENDERERS['mfa-setup'] = async (el) => {
 async function enrollMfa() {
   const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp' });
   if (error) return toast(error.message);
-  document.getElementById('mfa-qr').innerHTML = `<div class="card"><img src="${data.totp.qr_code}" style="width:100%;border-radius:8px;margin-bottom:10px"><label>Enter the 6-digit code from your app</label><input id="mfa-code" maxlength="6"><button class="btn btn-sm" onclick="confirmMfa('${data.id}')">Confirm</button></div>`;
+  const mount = document.getElementById('mfa-qr');
+  if (!mount || !data?.totp?.qr_code || !data?.id) return toast('Could not prepare the authenticator setup. Try again.');
+  const card = document.createElement('section');
+  card.className = 'mfa-setup-card';
+  const heading = document.createElement('h3');
+  heading.textContent = 'Scan this code';
+  const description = document.createElement('p');
+  description.textContent = 'Open your authenticator app and scan the QR code below.';
+  const image = document.createElement('img');
+  image.className = 'mfa-qr-image';
+  image.alt = 'Authenticator setup QR code';
+  image.src = data.totp.qr_code;
+  const label = document.createElement('label');
+  label.htmlFor = 'mfa-code';
+  label.textContent = '6-digit verification code';
+  const input = document.createElement('input');
+  input.id = 'mfa-code';
+  input.inputMode = 'numeric';
+  input.autocomplete = 'one-time-code';
+  input.maxLength = 6;
+  input.pattern = '[0-9]{6}';
+  const button = document.createElement('button');
+  button.className = 'btn mfa-confirm';
+  button.type = 'button';
+  button.textContent = 'Verify and enable';
+  button.addEventListener('click', () => confirmMfa(data.id));
+  card.append(heading, description, image, label, input, button);
+  mount.replaceChildren(card);
 }
 async function confirmMfa(factorId) {
   const code = document.getElementById('mfa-code').value.trim();

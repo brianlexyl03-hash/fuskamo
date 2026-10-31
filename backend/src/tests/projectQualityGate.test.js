@@ -17,14 +17,14 @@ function readAll(dir, ext) {
   return out;
 }
 
-test('migration chain is contiguous through 031', () => {
+test('migration chain is contiguous through 033', () => {
   const nums = readAll(migrations, '.sql')
     .map(p => path.basename(p).match(/^(\d+)_/))
     .filter(Boolean)
     .map(m => Number(m[1]))
     .sort((a,b) => a-b);
-  assert.equal(nums.at(-1), 31);
-  for (let i = 1; i <= 31; i++) assert.ok(nums.includes(i), `missing migration ${i}`);
+  assert.equal(nums.at(-1), 33);
+  for (let i = 1; i <= 33; i++) assert.ok(nums.includes(i), `missing migration ${i}`);
 });
 
 test('Flutter runtime configuration cannot fail merely because .env is absent', () => {

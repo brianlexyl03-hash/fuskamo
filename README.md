@@ -1,88 +1,145 @@
 # FUSKAMO
 
-Global football talent discovery platform. FUSKAMO connects players — from any village, any estate, any country — with verified scouts and agents. Built as a **native Flutter application** (Android + iOS, one Dart codebase) for Google Play Store / App Store release. No WebView, no HTML/CSS/JS in the shipped app.
+**Football talent discovery, player development and community.**
 
-Built by FUSKAMO NPC.
+FUSKAMO helps football players present their profiles and work, and helps scouts, coaches, clubs and supporters discover talent and football activity. The repository contains the native mobile app, the public web experience, a separate admin console, backend services and database assets.
 
-## Setup before this runs
+**Public website:** https://fuskamo.vercel.app  
+**Source:** https://github.com/brianlexyl03-hash/fuskamo  
+**Privacy Policy:** [legal/privacy-policy.md](legal/privacy-policy.md)  
+**Terms of Service:** [legal/terms.md](legal/terms.md)
 
-`android/` is already committed and configured in this repo (signing
-config, manifest permissions, `applicationId com.fuskamo.fuskamo`) — do
-**not** run `flutter create .` for Android, it would overwrite that
-configuration. Just run:
+> Product scope note: the native app, web app and admin console are separate deliverables. They share the FUSKAMO brand and backend/data services, but they are not currently a single Next.js application. Do not assume that a feature implemented on one surface is automatically implemented on the others.
+
+## Product surfaces
+
+| Surface | Location | Technology | Purpose |
+|---|---|---|---|
+| Native mobile app | Repository root: `lib/`, `android/`, `ios/` (if generated) | Flutter / Dart | Android and iOS experience |
+| Public web app | `web-app/` | Static HTML, CSS and JavaScript | Browser-based user experience |
+| Admin console | `admin-web/` | Standalone browser application | Restricted moderation and operational tools |
+| API/backend | `backend/` | Node.js / Express | Privileged operations, integrations and service endpoints |
+| Database and API contract | `database/`, `combined_migrations.sql`, `api/` | PostgreSQL / Supabase SQL, OpenAPI | Schema, access policies and API reference |
+
+## Main capabilities in the codebase
+
+The project includes account authentication, player and scout profiles, player discovery, social feed and media interactions, groups, messaging screens, notifications, reels/video surfaces, scoreboard and football data, moderation, admin workflows, analytics screens, and payment/backend integrations.
+
+Feature availability and parity vary by platform. A screen or design element is not proof that its backend workflow, security policy, media pipeline or production integration is complete. See [BLOCKERS.md](BLOCKERS.md) for the known integration and parity work that still requires implementation or external credentials.
+
+## Repository map
+
+- `lib/` — Flutter application code: screens, widgets, providers, repositories, services, models, routing, theme and validation.
+- `android/` — Android native project and release configuration.
+- `ios/` — iOS native project, when generated and maintained.
+- `web-app/` — public web client and its styling, runtime and Vercel configuration.
+- `admin-web/` — separate administrative web console.
+- `backend/` — Express API, authentication/authorization, controllers, repositories, jobs, notifications, media and integrations.
+- `database/` — SQL schema and migration assets.
+- `api/openapi.yaml` — API contract.
+- `docs/` — architecture, setup, operations and product documentation.
+- `legal/` — privacy policy, terms and third-party licence notes.
+- `.github/workflows/` — CI and release automation.
+- `scripts/` — local build, test, backup and restore helpers.
+
+## Getting started
+
+### Requirements
+
+- Flutter stable and Dart compatible with the SDK range in `pubspec.yaml`.
+- Node.js version supported by `backend/package.json` and `web-app/package.json`.
+- A Supabase project with the required schema, migrations, authentication and Storage configuration.
+- Provider credentials only for the integrations you intend to run (for example, Firebase, payment, email/SMS or AI providers).
+
+### Native app
+
+From the repository root:
 
 ```bash
 flutter pub get
+cp .env.example .env
+# Set the public Supabase URL and anon key, plus the backend URL.
+flutter run
 ```
 
-`ios/` has **not** been generated or committed yet (see "Genuinely still
-open" below) — when you're ready for an iOS build, on a Mac with Xcode
-installed, generate only that platform so Android is untouched:
+Do not commit populated `.env` files, signing keys, service-role keys or provider secrets. Android release signing requires the developer-owned keystore and `android/key.properties`; see `android/key.properties.example` and the Android release workflow.
+
+### Public web app
 
 ```bash
-flutter create . --platforms=ios --org com.fuskamo --project-name fuskamo
+cd web-app
+cp config.example.js config.js
+# Set SUPABASE_URL and SUPABASE_ANON_KEY in config.js for local testing.
+npm test
+npm run serve
 ```
 
-Then copy `.env.example` to `.env` and fill in your Supabase URL/anon key, plus your deployed backend URL/key.
+Open http://localhost:4173. The browser client must use only the public Supabase anon key and public service URLs. Never expose a Supabase service-role key, database password, payment secret, JWT signing secret or other server credential in browser code.
 
-Also start the custom backend (M-Pesa, AI, privileged operations):
+For Vercel, configure the public Supabase and backend URL environment variables in the project settings. The build script generates the browser configuration. Review `web-app/README.md` before changing deployment behavior.
+
+### Backend
+
 ```bash
 cd backend
-cp .env.example .env   # fill in Supabase service role key, M-Pesa + AI credentials
+cp .env.example .env
+# Fill only the secrets for integrations you have configured.
 npm install
 npm run dev
 ```
-See `backend/README.md` for the full architecture reasoning and endpoint list.
 
-## What's built
+See [backend/README.md](backend/README.md) for endpoints, configuration and deployment notes. Keep backend secrets on the server.
 
-- [x] Full Flutter app: 14 real screens (Feed, Discover, Search, Upload, Scouts, Scout apply, Profile/account, Notifications, Notification preferences, MFA setup, MFA challenge, Video player, Region detail, root shell/nav) — not a WebView
-- [x] Typed models (`Player`, `Scout`, `Region`) — no hardcoded personal data anywhere
-- [x] Supabase integration via services/repositories/providers (Provider state management)
-- [x] Player submission form with optional video attach (Supabase Storage)
-- [x] Design system ported 1:1 from the original pitch-themed prototype (`lib/theme/`, `lib/constants/`)
-- [x] go_router navigation, bottom nav
-- [x] App icon (`assets/icons/`) — generated from the user-provided FUSKAMO logo design; source was 256×256, upscaled for the 512×512 sizes (Play Store listing, maskable), so re-supply a higher-res source if that upscale looks soft at full size
-- [x] Custom backend (`/backend`) — real Express app: M-Pesa STK Push + callback + admin-triggered refunds, AI player-summary endpoint, live country list, notification dispatch (SMS/email/push)
-- [x] Auth — real Supabase email/password accounts with email verification enforced in-app (`lib/providers/auth_provider.dart`), optional TOTP MFA (`lib/screens/mfa_setup_screen.dart`, `mfa_challenge_screen.dart`)
-- [x] Push notifications — real FCM wiring (`lib/notifications/push_notification_service.dart`); still needs a Firebase project's credentials before it can actually send anything, see `docs/push-notifications-setup.md`
-- [x] Email and SMS notification channels — real Africa's Talking (SMS) and SMTP (email) integration (`backend/src/email/`, `backend/src/notifications/smsService.js`), wired into player approve/reject/feature events, gated by each user's own notification preferences. In-app notifications also work via Supabase Realtime.
-- [x] Localisation — real EN/Swahili toggle (`lib/localisation/`)
-- [x] Connectivity-aware offline banner (`lib/network/connectivity_service.dart`, `lib/widgets/offline_banner.dart`)
-- [x] Video playback in-feed (`lib/screens/video_player_screen.dart`)
-- [x] Search across players and scouts (`lib/screens/search_screen.dart`)
-- [x] Real contact (email/WhatsApp/call — `lib/helpers/contact_launcher.dart`), saved players, M-Pesa "boost submission" payment flow
-- [x] Admin system — a separate console (`admin-web/`), not a screen inside this app. Every administrator has their own Supabase Auth account, a role, and granular permissions (Super Admin / Admin / Moderator / Support, or custom roles) — no shared key anywhere. Covers player/scout approval, transactions, a full audit log (who/when/from where), MFA, session management, and Super-Admin account lifecycle management. See `docs/admin-access.md`.
-- [x] Scout application flow (`lib/screens/scout_apply_screen.dart`)
+### Admin console
 
-Architecture, end to end:
+See [admin-web/README.md](admin-web/README.md). Admin access must use individual authorised accounts and role-based permissions. Never embed admin credentials in the public web or native application.
 
-```
-Flutter app
-    ↓
-Supabase (auth, database, storage, RLS)
-    ↓
-Custom backend (M-Pesa, AI, notifications)
-    ↓
-admin-web/ (separate console, its own Supabase Auth accounts + RBAC)
+## Configuration and security
+
+- Use `.env.example` and `backend/.env.example` as templates; local secret files are ignored by Git.
+- Use Supabase Row Level Security as the database access boundary. Review policies for every table before production.
+- Keep public anon keys separate from service-role and provider secrets.
+- Use private storage buckets and time-limited signed URLs for private media.
+- Rotate any credential that has ever been committed or exposed.
+- Review [security/policies/data-handling.md](security/policies/data-handling.md) and the security documentation under `docs/`.
+- Do not use production personal data in tests or screenshots.
+
+## Tests and quality checks
+
+Run the checks relevant to the surface you changed:
+
+```bash
+# Flutter static analysis and tests
+flutter analyze
+flutter test
+
+# Public web JavaScript syntax check
+cd web-app && npm test
+
+# Backend checks
+cd backend && npm test
 ```
 
-## Genuinely still open
+Some commands may require dependencies, secrets, a running Supabase project, Redis, provider credentials or device/emulator access. A successful syntax check is not equivalent to end-to-end verification. Record external dependencies and failed checks in [BLOCKERS.md](BLOCKERS.md); never report an unrun test as passing.
 
-- [ ] Threaded in-app messaging (current "Contact" is real but hands off to email/WhatsApp/phone — there's no message history inside the app itself)
-- [ ] Live per-region player counts on Discover (currently shows country-count per region, not a live player tally)
-- [ ] Virus scanning on uploaded video clips (`backend/src/uploads/virusScan.js` — needs a ClamAV instance, deliberately left unimplemented rather than faked)
-- [ ] iOS build — the `ios/` native project folder hasn't been generated/committed yet; Android is the current target
-- [ ] `backend/package-lock.json` isn't committed yet — the Dockerfile uses `npm install` rather than `npm ci` until one exists (run `npm install` once with network access from `backend/`, then commit the generated lockfile and switch the Dockerfile back to `npm ci` for reproducible builds)
+## User acquisition and community growth
 
-## Project structure
+FUSKAMO's growth workflow should identify relevant football communities and public conversations, then support human-reviewed, context-specific participation. See [growth/README.md](growth/README.md) for the Instagram and Reddit discovery plan, official API boundaries, keyword monitoring, consent and outreach rules.
 
-See the full annotated tree in `docs/architecture.md`. Short version: `lib/` is organized by responsibility (screens, widgets, providers, repositories, services, models) — every screen from the original prototype has a matching Flutter screen, every reusable UI piece is a widget, every Supabase call lives in `services/`.
+FUSKAMO does not scrape private accounts, harvest personal contact details, automate unsolicited bulk DMs, evade platform limits or post repetitive promotional spam.
 
-## Docs
+## Legal
 
-`docs/` covers architecture, API, database, deployment (Play Store + App Store), security, testing, and a user guide.
+- [Privacy Policy](legal/privacy-policy.md)
+- [Terms of Service](legal/terms.md)
+- [Third-party licences](legal/licences.md)
+
+These documents are launch drafts and must be reviewed against the real operating entity, data flows, jurisdictions and safeguarding practices before public release.
+
+## Contributing
+
+Keep changes scoped to the relevant product surface. Preserve migrations, signing configuration, CI, environment templates and deployment assets. Add or update tests and documentation with every behavior change. Never commit secrets, user data, generated build output or local machine state.
 
 ## License
 
-See `LICENSE`.
+See [LICENSE](LICENSE).
