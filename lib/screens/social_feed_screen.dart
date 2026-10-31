@@ -88,7 +88,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
           TextField(controller: url, decoration: const InputDecoration(labelText: 'Image or video URL')),
           TextField(controller: caption, decoration: const InputDecoration(labelText: 'Caption')),
           DropdownButtonFormField<String>(
-            value: visibility,
+            initialValue: visibility,
             decoration: const InputDecoration(labelText: 'Audience'),
             items: const [
               DropdownMenuItem(value: 'public', child: Text('Public')),
