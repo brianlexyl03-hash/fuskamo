@@ -362,33 +362,14 @@ RENDERERS.feed = async (el) => {
   const followedForSuggestions = new Set((suggestionFollows||[]).map(x=>x.followed_id));
   const { data: suggestionRows } = await sb.from('profiles').select('user_id,display_name,username,avatar_url,verified,role').neq('user_id',CURRENT_USER.id).limit(24);
   const suggestionsHtml = (suggestionRows||[]).filter(x=>!followedForSuggestions.has(x.user_id)).slice(0,5).map(p=>`<div class="suggestion">${avatarHtml(p.avatar_url,p.display_name,'sm')}<div class="suggestion-copy"><strong>${escapeHtml(p.username||p.display_name||'Member')}</strong><small>${escapeHtml(p.role||'football community')}</small></div><button onclick="go('/public-profile/${p.user_id}')">View</button></div>`).join('');
+  const uniqueStories=[...new Map(stories.map(s=>[s.author_id,s])).values()].sort((x,y)=>{const xs=seenStories.has(x.id),ys=seenStories.has(y.id);return xs===ys?new Date(y.created_at)-new Date(x.created_at):xs?1:-1;});
   const storyHtml = `<div class="stories-tray" aria-label="Stories">
-    <button class="story-bubble" type="button" onclick="go('/story-settings')" aria-label="Add a story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
-    ${[...new Map(stories.map(s=>[s.author_id,s])).values()].map(s=>{const p=storyProfiles[s.author_id]||{};const own= s.author_id===CURRENT_USER?.id;return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url? `<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${own?'Your story':escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
+    <button class="story-bubble your-story" type="button" onclick="go('/story-settings')" aria-label="Add to your story"><span class="story-ring"><span class="story-initial">${avatarHtml(CURRENT_PROFILE?.avatar_url,CURRENT_PROFILE?.display_name,'sm')}</span></span><span class="story-add-mark">+</span><span class="story-label">Your story</span></button>
+    ${uniqueStories.map(s=>{const p=storyProfiles[s.author_id]||{};return `<button class="story-bubble" type="button" onclick="openStoryViewer('${s.id}')" aria-label="View story by ${escapeHtml(p.display_name||'Member')}"><span class="story-ring ${seenStories.has(s.id)?'seen':''}"><span class="story-initial">${p.avatar_url?`<img src="${escapeHtml(p.avatar_url)}" alt="">`:escapeHtml(initials(p.display_name||p.username||'Member'))}</span></span><span class="story-label">${escapeHtml(p.username||p.display_name||'Member')}</span></button>`}).join('')}
   </div>`;
-  el.innerHTML = `
-    ${storyHtml}
-    <div class="feed-tabs" role="tablist" aria-label="Feed type">
-      <button type="button" class="${SOCIAL_FEED_MODE==='for-you'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='for-you'}" onclick="setSocialFeedMode('for-you')">For you</button>
-      <button type="button" class="${SOCIAL_FEED_MODE==='following'?'active':''}" aria-selected="${SOCIAL_FEED_MODE==='following'}" onclick="setSocialFeedMode('following')">Following</button>
-    </div>
-    <div class="football-shortcuts"><button onclick="go('/discover')">Players</button><button onclick="go('/scouts')">Scouts</button><button onclick="go('/groups')">Groups</button><button onclick="go('/messages')">Messages</button></div>
-    <div class="composer-row">
-      ${avatarHtml(CURRENT_PROFILE?.avatar_url, CURRENT_PROFILE?.display_name, 'sm')}
-      <div style="flex:1">
-        <textarea id="composer-body" placeholder="What's happening in football?" rows="2"></textarea>
-        <div id="composer-preview"></div>
-        <div class="row between" style="margin-top:6px">
-          <label for="composer-file" class="icon-btn" style="cursor:pointer;color:var(--green)">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-6 5"/></svg>
-          </label>
-          <input type="file" id="composer-file" accept="image/*,video/*" style="display:none" onchange="previewComposerFile()">
-          <button class="btn" id="composer-post-btn" style="width:auto;padding:9px 22px" onclick="submitPost()">Post</button>
-        </div>
-      </div>
-    </div>
-    <div id="feed-list">${(posts || []).map((p) => feedPostHtml(p, profiles[p.author_id], liked.has(p.id))).join('') || emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet', SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>
-    <aside class="social-suggestions"><div class="suggestion-head"><span>Suggested for you</span><button onclick="go('/discover')">See all</button></div>${suggestionsHtml || '<p class="muted">Follow players, scouts and clubs to build your network.</p>'}<div class="suggestion-links"><button onclick="go('/discover')">Discover players</button><button onclick="go('/scouts')">Find scouts</button><button onclick="go('/groups')">Football groups</button><button onclick="go('/account-settings')">Settings</button></div><p class="suggestion-footer">FUSKAMO · Football, talent, community</p></aside>`;
+  const suggested=(suggestionRows||[]).find(p=>!followedForSuggestions.has(p.user_id));
+  const suggestedHtml=suggested?`<section class="home-suggestion" aria-label="Suggested account"><div class="home-suggestion-identity">${avatarHtml(suggested.avatar_url,suggested.display_name,'sm')}<div><strong>${escapeHtml(suggested.username||suggested.display_name||'FUSKAMO member')}</strong><span>Suggested for you</span></div></div><button type="button" onclick="toggleFollow('${suggested.user_id}',this)">Follow</button><button class="home-suggestion-more" type="button" onclick="go('/public-profile/${suggested.user_id}')" aria-label="View suggested account"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h12"/></svg></button></section>`:'';
+  el.innerHTML = `${storyHtml}${suggestedHtml}<div id="feed-list">${(posts||[]).map(p=>feedPostHtml(p,profiles[p.author_id],liked.has(p.id))).join('')||emptyHtml(SOCIAL_FEED_MODE==='following'?'No posts from people you follow yet':'No posts yet',SOCIAL_FEED_MODE==='following'?'Follow players, scouts and clubs to see their updates here.':'Be the first to share something.')}</div>`;
   initFeedVideoAutoplay();
 };
 let composerFile = null;
