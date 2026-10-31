@@ -432,23 +432,35 @@ function initFeedVideoAutoplay() {
   videos.forEach((v) => observer.observe(v));
 }
 function feedPostHtml(p, profile, isLiked) {
-  return `<article class="card post-card">
-    <div class="post-header row" style="align-items:center;margin-bottom:10px">${avatarHtml(profile?.avatar_url, profile?.display_name, 'sm')}
-    <div style="flex:1;min-width:0">
-      <div class="row" style="gap:4px"><span style="font-weight:700">${escapeHtml(profile?.display_name || 'FUSKAMO Member')}</span>${badgeHtml(profile?.badge_type, profile?.verified)}<span class="muted">· ${timeAgo(p.created_at)}</span></div>
-      ${p.media_url ? `<div class="post-media" style="position:relative;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line)" ondblclick="dblTapLike('${p.id}', this)">
-        ${p.media_type === 'external_video' ? feedVideoHtml(p.media_url) : `<img src="${escapeHtml(p.media_url)}" style="width:100%;display:block;max-height:420px;object-fit:cover">`}
-        <div class="dbl-heart">${HEART_SVG_FILLED}</div>
-      </div>` : ''}
-      <div class="row post-actions" style="gap:16px;margin-top:10px">
-        <span class="engage-btn ${isLiked ? 'liked' : ''}" onclick="togglePostLike('${p.id}', this)" data-liked="${isLiked}">${HEART_SVG(isLiked)}<span class="cnt">${p.like_count}</span></span>
-        <span class="engage-btn" onclick="go('/post/${p.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg>${p.comment_count}</span>
-        <span class="engage-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${p.repost_count}</span>
-      </div>
-      ${p.body ? `<p class="post-caption" style="margin:8px 0 0;line-height:1.5;overflow-wrap:anywhere"><strong>${escapeHtml(profile?.username || profile?.display_name || 'Member')}</strong> ${escapeHtml(p.body)}</p>` : ''}
-    </div>
-  </article>`;
+  const author=profile?.username||profile?.display_name||'Member';
+  const media=p.media_url?'<div class="post-media" ondblclick="dblTapLike(\''+p.id+'\', this)">'+(p.media_type==='external_video'?feedVideoHtml(p.media_url):'<img src="'+escapeHtml(p.media_url)+'" alt="Post by '+escapeHtml(author)+'" loading="lazy">')+'<div class="dbl-heart">'+HEART_SVG_FILLED+'</div></div>':'';
+  return '<article class="card post-card" data-post-id="'+p.id+'">'+
+    '<header class="post-header row">'+avatarHtml(profile?.avatar_url,profile?.display_name,'sm')+
+    '<div class="post-identity"><strong>'+escapeHtml(author)+'</strong>'+badgeHtml(profile?.badge_type,profile?.verified)+'<span class="muted"> · '+timeAgo(p.created_at)+'</span></div>'+
+    '<button class="post-more" type="button" onclick="openPostShare(\''+p.id+'\')" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></header>'+
+    media+
+    '<div class="row post-actions">'+
+    '<button type="button" class="engage-btn '+(isLiked?'liked':'')+'" onclick="togglePostLike(\''+p.id+'\', this)" data-liked="'+isLiked+'">'+HEART_SVG(isLiked)+'<span class="cnt">'+p.like_count+'</span></button>'+
+    '<button type="button" class="engage-btn" onclick="go(\'/post/'+p.id+'\')" aria-label="Comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 9 9 0 0 1-3.6-.8L3 20l1-5a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 11.9 3a8.5 8.5 0 0 1 9.1 8.5z"/></svg><span>'+p.comment_count+'</span></button>'+
+    '<button type="button" class="engage-btn" onclick="openPostShare(\''+p.id+'\')" aria-label="Share post"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>'+
+    '<button type="button" class="engage-btn post-save" onclick="togglePostSave(\''+p.id+'\',this)" aria-label="Save post"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button></div>'+
+    (p.body?'<p class="post-caption"><strong>'+escapeHtml(author)+'</strong> '+escapeHtml(p.body)+'</p>':'')+
+    '</article>';
 }
+function openPostShare(postId){
+  const url=new URL(window.location.href);url.hash='/post/'+postId;
+  document.getElementById('post-share-backdrop')?.remove();
+  const backdrop=document.createElement('div');backdrop.id='post-share-backdrop';backdrop.className='create-menu-backdrop';
+  backdrop.innerHTML='<section class="create-menu post-share-menu" role="dialog" aria-modal="true" aria-label="Share post"><h3>Share post</h3><button type="button" id="copy-post-link">Copy link <span>Copy a link to this post</span></button><button type="button" onclick="go(\'/messages\');closePostShare()">Send in a message <span>Open your FUSKAMO inbox</span></button><button type="button" onclick="closePostShare()" style="justify-content:center;color:#aaa">Cancel</button></section>';
+  backdrop.addEventListener('click',event=>{if(event.target===backdrop)closePostShare()});
+  document.body.appendChild(backdrop);
+  document.getElementById('copy-post-link')?.addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText(url.toString());toast('Post link copied');closePostShare();}
+    catch(error){toast('Could not copy the post link.');}
+  });
+}
+function closePostShare(){document.getElementById('post-share-backdrop')?.remove();}
+
 function HEART_SVG(filled) { return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`; }
 const HEART_SVG_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 20.5s-7.5-4.6-9.8-9.3C.8 7.8 2.4 4.5 5.6 3.7c2-.5 4 .3 5.2 2 .3.4.8.4 1.1 0 1.2-1.7 3.2-2.5 5.2-2 3.2.8 4.8 4.1 3.4 7.5-2.3 4.7-9.8 9.3-9.8 9.3z"/></svg>`;
 async function dblTapLike(postId, wrapEl) {
@@ -552,6 +564,13 @@ async function submitPost() {
     toast(e.message || 'Failed to post');
     btn.disabled = false; btn.textContent = 'Post';
   }
+}
+async function togglePostSave(postId,button){
+  if(!requireAuth())return;
+  const {data:existing,error:lookupError}=await sb.from('social_post_saves').select('post_id').eq('post_id',postId).eq('user_id',CURRENT_USER.id).maybeSingle();
+  if(lookupError)return toast(lookupError.message);
+  if(existing){const {error}=await sb.from('social_post_saves').delete().eq('post_id',postId).eq('user_id',CURRENT_USER.id);if(error)return toast(error.message);button.classList.remove('saved');}
+  else{const {error}=await sb.from('social_post_saves').insert({post_id:postId,user_id:CURRENT_USER.id});if(error)return toast(error.message);button.classList.add('saved');}
 }
 async function togglePostLike(postId, span) {
   if (!requireAuth()) return;
