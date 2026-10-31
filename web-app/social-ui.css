@@ -543,3 +543,13 @@ label{font-size:13px;color:#c7c7c7}
  #view-feed .post-card{padding:0 0 12px;margin:0 0 6px}
  #view-feed .post-card .post-media{border-radius:0}
 }
+
+#view-feed .post-identity{display:flex;align-items:center;gap:5px;flex:1;min-width:0;font-size:13px}
+#view-feed .post-identity strong{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-feed .post-more{width:34px;height:34px;border:0;background:transparent;color:#f5f5f5;display:grid;place-items:center}
+#view-feed .post-more svg{width:22px;height:22px;fill:currentColor}
+#view-feed .post-actions .engage-btn{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:#f5f5f5;padding:4px;min-height:34px;cursor:pointer}
+#view-feed .post-actions .engage-btn svg{width:25px;height:25px}
+#view-feed .post-actions .engage-btn.liked{color:#ed4956}
+#view-feed .post-actions .post-save{margin-left:auto}
+#view-feed .post-actions .post-save.saved{color:#0095f6}
